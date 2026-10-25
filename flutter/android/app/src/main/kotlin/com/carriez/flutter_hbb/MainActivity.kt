@@ -46,6 +46,7 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     companion object {
         var flutterMethodChannel: MethodChannel? = null
+        private var liveActivity: MainActivity? = null // Vantaris: la que tiene el canal
         private var _rdClipboardManager: RdClipboardManager? = null
         val rdClipboardManager: RdClipboardManager?
             get() = _rdClipboardManager;
@@ -75,6 +76,10 @@ class MainActivity : FlutterActivity() {
     private var isAudioStart = false
     private val audioRecordHandle = AudioRecordHandle(this, { false }, { isAudioStart })
 
+    // Vantaris: un solo motor Flutter que sobrevive a la actividad (ver VantarisEngine.kt).
+    override fun provideFlutterEngine(context: Context): FlutterEngine = VantarisEngine.get(context)
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         if (MainService.isReady) {
@@ -87,6 +92,7 @@ class MainActivity : FlutterActivity() {
             channelTag
         )
         initFlutterChannel(flutterMethodChannel!!)
+        liveActivity = this
         thread {
             try {
                 setCodecInfo()
@@ -247,6 +253,11 @@ class MainActivity : FlutterActivity() {
             unbindService(serviceConnection)
         }
         super.onDestroy()
+        // Vantaris: Dart sigue vivo sin la actividad; el canal pasa a un manejador sin pantalla.
+        if (liveActivity === this) {
+            liveActivity = null
+            VantarisEngine.installBackgroundHandler(this)
+        }
     }
 
     private val serviceConnection = object : ServiceConnection {
@@ -640,6 +651,28 @@ class MainActivity : FlutterActivity() {
                     } else {
                         result.success(null)
                     }
+                }
+                "vantaris_draw" -> {
+                    result.success(VantarisDrawOverlay.handle(this, call.arguments as String))
+                }
+                "vantaris_front" -> {
+                    // Videollamada entrante: la app al frente para que el usuario la acepte.
+                    VantarisEngine.bringToFront(this)
+                    result.success(null)
+                }
+                "vantaris_alta" -> {
+                    result.success(VantarisAlta.handle(this, call.arguments as String))
+                }
+                "vantaris_guard" -> {
+                    VantarisGuard.handle(this, call.arguments as String)
+                    result.success(null)
+                }
+                "vantaris_diag" -> {
+                    // Diagnóstico y acciones rápidas del técnico; contesta en otro hilo.
+                    VantarisDiag.handle(this, call.arguments as String, result)
+                }
+                "vantaris_install_apk" -> {
+                    result.success(VantarisUpdater.install(this, call.arguments as String))
                 }
                 "on_voice_call_started" -> {
                     onVoiceCallStarted()

@@ -47,7 +47,7 @@ import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
 
-const val DEFAULT_NOTIFY_TITLE = "RustDesk"
+const val DEFAULT_NOTIFY_TITLE = "Vantaris Soporte"
 const val DEFAULT_NOTIFY_TEXT = "Service is running"
 const val DEFAULT_NOTIFY_ID = 1
 const val NOTIFY_ID_OFFSET = 100
@@ -115,6 +115,8 @@ class MainService : Service() {
     fun rustSetByName(name: String, arg1: String, arg2: String) {
         when (name) {
             "add_connection" -> {
+                // Vantaris: sin Dart vivo nadie procesaría la pizarra ni el aviso (VantarisEngine.kt).
+                VantarisEngine.ensureRunning(this)
                 try {
                     val jsonObject = JSONObject(arg1)
                     val id = jsonObject["id"] as Int
@@ -253,7 +255,7 @@ class MainService : Service() {
         val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
         val homePath = applicationContext.getExternalFilesDir(null)?.absolutePath
             ?: applicationContext.filesDir.absolutePath
-        FFI.startServer(configPath, homePath, "")
+        FFI.startServer(configPath, homePath, BuildConfig.VANTARIS_CUSTOM_CLIENT)
 
         createForegroundNotification()
     }
@@ -817,12 +819,12 @@ class MainService : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationChannel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = "RustDesk"
-            val channelName = "RustDesk Service"
+            val channelName = "Vantaris Soporte"
             val channel = NotificationChannel(
                 channelId,
                 channelName, NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "RustDesk Service Channel"
+                description = "Servicio de soporte remoto Vantaris"
             }
             channel.lightColor = Color.BLUE
             channel.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
@@ -947,7 +949,7 @@ class MainService : Service() {
         val notification = notificationBuilder
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setContentTitle("$type ${translate("Established")}")
+            .setContentTitle("$type: conexión establecida") // Vantaris: antes «… Establecido»
             .setContentText("$username - $peerId")
             .build()
         notificationManager.notify(getClientNotifyID(clientID), notification)

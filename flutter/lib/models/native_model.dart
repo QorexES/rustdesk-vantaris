@@ -233,8 +233,20 @@ class PlatformFFI {
       await _ffiBind.mainSetHomeDir(home: _homeDir);
       await _ffiBind.mainInit(
         appDir: _dir,
-        customClientConfig: '',
+        // Vantaris: config firmada por la consola Pro (--dart-define). Vacía = Rust busca custom.txt junto al .exe.
+        customClientConfig: const String.fromEnvironment('VANTARIS_CUSTOM_CLIENT'),
       );
+      // Vantaris (solo compilaciones SIN config Pro): servidor por defecto para pruebas, si no hay otro puesto.
+      const vHost = String.fromEnvironment('VANTARIS_HOST');
+      if (vHost.isNotEmpty &&
+          (await _ffiBind.mainGetOption(key: 'custom-rendezvous-server'))
+              .isEmpty) {
+        await _ffiBind.mainSetOption(
+            key: 'custom-rendezvous-server', value: vHost);
+        await _ffiBind.mainSetOption(key: 'relay-server', value: vHost);
+        await _ffiBind.mainSetOption(
+            key: 'key', value: const String.fromEnvironment('VANTARIS_KEY'));
+      }
     } catch (e) {
       debugPrintStack(label: 'initialize failed: $e');
     }

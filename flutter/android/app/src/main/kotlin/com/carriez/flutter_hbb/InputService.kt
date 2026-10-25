@@ -254,7 +254,7 @@ class InputService : AccessibilityService() {
             isWheelActionsPolling = true
         }
         wheelActionsQueue.poll()?.let {
-            dispatchGesture(it, null, null)
+            VantarisGuard.dispatch(this@InputService, it)
             timer.purge()
             timer.schedule(object : TimerTask() {
                 override fun run() {
@@ -277,7 +277,7 @@ class InputService : AccessibilityService() {
             val builder = GestureDescription.Builder()
             builder.addStroke(longPressStroke)
             Log.d(logTag, "performClick x:$x y:$y time:$duration")
-            dispatchGesture(builder.build(), null, null)
+            VantarisGuard.dispatch(this@InputService, builder.build())
         } catch (e: Exception) {
             Log.e(logTag, "performClick, error:$e")
         }
@@ -339,7 +339,7 @@ class InputService : AccessibilityService() {
                 val builder = GestureDescription.Builder()
                 builder.addStroke(it)
                 Log.d(logTag, "doDispatchGesture x:$x y:$y time:$duration")
-                dispatchGesture(builder.build(), null, null)
+                VantarisGuard.dispatch(this@InputService, builder.build())
             }
         } catch (e: Exception) {
             Log.e(logTag, "doDispatchGesture, willContinue:$willContinue, error:$e")
@@ -376,7 +376,7 @@ class InputService : AccessibilityService() {
             val builder = GestureDescription.Builder()
             builder.addStroke(stroke)
             Log.d(logTag, "end gesture x:$x y:$y time:$duration")
-            dispatchGesture(builder.build(), null, null)
+            VantarisGuard.dispatch(this@InputService, builder.build())
         } catch (e: Exception) {
             Log.e(logTag, "endGesture error:$e")
         }
@@ -561,7 +561,10 @@ class InputService : AccessibilityService() {
 
         val rootInActiveWindow = getRootInActiveWindow()
 
-        Log.d(logTag, "focusInput:$focusInput focusAccessibilityInput:$focusAccessibilityInput rootInActiveWindow:$rootInActiveWindow")
+        // Vantaris Play: no se escribe en logcat el contenido de la pantalla (elemento enfocado).
+        if (!BuildConfig.VANTARIS_PLAY) {
+            Log.d(logTag, "focusInput:$focusInput focusAccessibilityInput:$focusAccessibilityInput rootInActiveWindow:$rootInActiveWindow")
+        }
 
         if (focusInput != null) {
             if (focusInput.isFocusable() && focusInput.isEditable()) {

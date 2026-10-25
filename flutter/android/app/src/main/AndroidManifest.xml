@@ -15,8 +15,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Vantaris: videollamada con el técnico -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Vantaris: actualizarse a sí misma (el usuario confirma) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
@@ -24,12 +29,16 @@
             <!-- https://developer.android.com/training/package-visibility/use-cases#open-urls-custom-tabs -->
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
+        <!-- Vantaris: la app TPV, para el diagnóstico remoto (VantarisDiag.kt). -->
+        <package android:name="es.vantaris.app.tpv" />
+        <package android:name="es.vantaris.eem.tpv" />
     </queries>
 
     <application
         android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher"
-        android:label="RustDesk"
+        android:label="${appLabel}"
+        android:networkSecurityConfig="@xml/vantaris_network_security"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
 
@@ -49,7 +58,7 @@
             android:name=".InputService"
             android:enabled="true"
             android:exported="false"
-            android:label="RustDesk Input"
+            android:label="@string/input_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -102,6 +111,12 @@
             android:name=".FloatingWindowService"
             android:enabled="true" />
 
+        <!-- Vantaris: alta del equipo por adb (solo acepta el uid de shell; ver VantarisAlta.kt) -->
+        <provider
+            android:name=".VantarisAltaProvider"
+            android:authorities="${applicationId}.vantaris.alta"
+            android:exported="true" />
+
         <!--
  Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java
@@ -109,6 +124,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <receiver
+            android:name=".VantarisUpdateReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

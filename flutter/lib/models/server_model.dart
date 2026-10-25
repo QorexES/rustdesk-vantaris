@@ -16,6 +16,8 @@ import '../desktop/pages/server_page.dart' as desktop;
 import '../desktop/widgets/tabbar_widget.dart';
 import '../mobile/pages/server_page.dart';
 import 'model.dart';
+import '../vantaris/update/updater.dart';
+import '../vantaris/play.dart';
 
 const kLoginDialogTag = "LOGIN";
 
@@ -162,6 +164,7 @@ class ServerModel with ChangeNotifier {
           debugPrint("clients not match!");
           updateClientState(res);
         } else {
+          vantarisSessionHeartbeat(_clients.isNotEmpty); // Vantaris: no actualizar en plena asistencia
           if (_clients.isEmpty) {
             hideCmWindow();
             if (_zeroClientLengthCounter++ == 12) {
@@ -402,6 +405,12 @@ class ServerModel with ChangeNotifier {
       await checkRequestNotificationPermission();
       if (bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) != 'Y') {
         await checkFloatingWindowPermission();
+      }
+      // Vantaris Play: aviso breve propio antes de que Android pida la captura.
+      if (kVantarisPlay) {
+        final dm = parent.target?.dialogManager;
+        if (dm != null && await vantarisAvisoCaptura(dm)) startService();
+        return;
       }
       final res = await parent.target?.dialogManager
           .show<bool>((setState, close, context) {
@@ -895,6 +904,14 @@ String getLoginDialogTag(int id) {
 }
 
 showInputWarnAlert(FFI ffi) {
+  // Vantaris Play: aviso destacado (política de accesibilidad de Google Play). Sin «Aceptar» no se
+  // abre el ajuste.
+  if (kVantarisPlay) {
+    vantarisAvisoAccesibilidad(ffi.dialogManager).then((ok) {
+      if (ok) AndroidPermissionManager.startAction(kActionAccessibilitySettings);
+    });
+    return;
+  }
   ffi.dialogManager.show((setState, close, context) {
     submit() {
       AndroidPermissionManager.startAction(kActionAccessibilitySettings);

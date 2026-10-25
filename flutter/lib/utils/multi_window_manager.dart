@@ -8,6 +8,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/input_model.dart';
+import 'package:flutter_hbb/vantaris/tecnico.dart';
 
 /// must keep the order
 // ignore: constant_identifier_names
@@ -231,6 +232,10 @@ class RustDeskMultiWindowManager {
     bool? isSharedPassword,
     String? connToken,
   }) async {
+    // Vantaris: sin cuenta de técnico no se conecta (registro de auditoría de Pro).
+    if (!await vantarisTecnicoPuedeConectar()) {
+      return MultiWindowCallResult(-1, null);
+    }
     var params = {
       "type": type.index,
       "id": remoteId,

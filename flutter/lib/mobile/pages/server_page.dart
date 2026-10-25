@@ -1,3 +1,9 @@
+import 'package:flutter_hbb/vantaris/alta.dart';
+import 'package:flutter_hbb/vantaris/guard.dart';
+import 'package:flutter_hbb/vantaris/marca.dart';
+import 'package:flutter_hbb/vantaris/permiso_pizarra.dart';
+import 'package:flutter_hbb/vantaris/play.dart';
+import 'package:flutter_hbb/vantaris/update/updater.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -210,11 +216,18 @@ class _ServerPageState extends State<ServerPage> {
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
                         buildPresetPasswordWarningMobile(),
+                        const VantarisMarca(alto: 44) // Vantaris: logotipo
+                            .marginOnly(top: 12, bottom: 4),
+                        const VantarisPermisoCapaCard(), // Vantaris: permiso de la pizarra
+                        const VantarisAltaCard(), // Vantaris: acceso desatendido
+                        const VantarisUpdateBanner(),
                         gFFI.serverModel.isStart
                             ? ServerInfo()
                             : ServiceNotRunningNotification(),
                         const ConnectionManager(),
                         const PermissionChecker(),
+                        if (kVantarisPlay)
+                          const VantarisCodigoFuente(), // Vantaris Play: AGPL
                         SizedBox.fromSize(size: const Size(0, 15.0)),
                       ],
                     ),
@@ -893,10 +906,17 @@ class ClientInfo extends StatelessWidget {
 }
 
 void androidChannelInit() {
+  // Vantaris: aviso de «técnico conectado» (ver lib/vantaris/guard.dart).
+  gFFI.serverModel.addListener(vantarisGuardSync);
   gFFI.setMethodCallHandler((method, arguments) {
     debugPrint("flutter got android msg,$method,$arguments");
     try {
       switch (method) {
+        case "vantaris_hangup":
+        case "vantaris_unblock":
+        case "vantaris_reply":
+          vantarisGuardOnNative(method, arguments);
+          break;
         case "start_capture":
           {
             gFFI.dialogManager.dismissAll();

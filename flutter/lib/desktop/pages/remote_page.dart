@@ -23,6 +23,12 @@ import '../widgets/remote_toolbar.dart';
 import '../widgets/kb_layout_type_chooser.dart';
 import '../widgets/tabbar_widget.dart';
 import 'macos_full_screen_focus_recovery.dart';
+import '../../vantaris/draw_layer.dart';
+import '../../vantaris/call.dart';
+import '../../vantaris/guard.dart';
+import '../../vantaris/summary.dart';
+import '../../vantaris/demo.dart';
+import '../../vantaris/diag_panel.dart';
 
 import 'package:flutter_hbb/native/custom_cursor.dart'
     if (dart.library.html) 'package:flutter_hbb/web/custom_cursor.dart';
@@ -157,6 +163,7 @@ class _RemotePageState extends State<RemotePage>
     }
     Get.put<FFI>(_ffi, tag: widget.id);
     _ffi.imageModel.addCallbackOnFirstImage((String peerId) {
+      vantarisMaybeRunDemo(_ffi); // solo con VANTARIS_DEMO=1
       _ffi.canvasModel.activateLocalCursor();
       showKBLayoutTypeChooserIfNeeded(
           _ffi.ffiModel.pi.platform, _ffi.dialogManager);
@@ -674,6 +681,13 @@ class _RemotePageState extends State<RemotePage>
     if (closeSession) {
       clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
     }
+    if (closeSession) {
+      VantarisDrawState.disposeFor(sessionId);
+      VantarisGuardState.disposeFor(sessionId);
+      VantarisSummaryState.disposeFor(sessionId);
+      VantarisCallState.disposeFor(sessionId);
+      VantarisDiagState.disposeFor(sessionId);
+    }
     await _ffi.close(closeSession: closeSession);
     _timer?.cancel();
     _ffi.dialogManager.dismissAll();
@@ -988,6 +1002,9 @@ class _RemotePageState extends State<RemotePage>
                   zoomCursor: _zoomCursor,
                 )));
     }
+    // Vantaris: lápiz para señalar en la pantalla remota (tapa la entrada mientras está activo).
+    paints.add(VantarisDrawLayer(ffi: _ffi));
+    paints.add(VantarisCallPanel(ffi: _ffi));
     paints.add(
       Positioned(
         top: 10,

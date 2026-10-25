@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 import '../../mobile/pages/home_page.dart';
+import '../../vantaris/quick_replies.dart';
 
 enum ChatPageType {
   mobileMain,
@@ -104,6 +105,8 @@ class ChatPage extends StatelessWidget implements PageShape {
                         [],
                     readOnly: readOnly,
                     inputOptions: InputOptions(
+                      // Vantaris: respuestas rápidas del técnico.
+                      leading: vantarisChatLeading(chatModel),
                       focusNode: chatModel.inputNode,
                       textController: chatModel.textController,
                       inputTextStyle: TextStyle(

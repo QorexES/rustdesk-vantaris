@@ -3,6 +3,7 @@
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
 #include <texture_rgba_renderer/texture_rgba_renderer_plugin_c_api.h>
 #include <flutter_gpu_texture_renderer/flutter_gpu_texture_renderer_plugin_c_api.h>
+#include <flutter_webrtc/flutter_web_r_t_c_plugin.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -18,6 +19,9 @@
 #include <memory>
 
 #include "win32_desktop.h"
+#include "vantaris_audio.h"
+#include "vantaris_diag.h"
+#include "vantaris_overlay.h"
 
 namespace {
 
@@ -143,6 +147,17 @@ bool FlutterWindow::OnCreate() {
 
         result->Success(succeeded);
       }
+      // Vantaris: lapiz y laser del tecnico sobre este equipo (ver vantaris_overlay.h).
+      else if (call.method_name() == "vantarisOverlay") {
+        if (const auto* payload = std::get_if<std::string>(call.arguments())) {
+          vantaris_overlay::Handle(*payload);
+        }
+        result->Success();
+      }
+      // Vantaris: datos del sistema para el diagnostico remoto (ver vantaris_diag.h).
+      else if (call.method_name() == "vantarisSysInfo") {
+        result->Success(flutter::EncodableValue(vantaris_diag::SysInfoJson()));
+      }
     });
 
   DesktopMultiWindowSetWindowCreatedCallback([](void *controller) {
@@ -153,6 +168,84 @@ bool FlutterWindow::OnCreate() {
         registry->GetRegistrarForPlugin("TextureRgbaRendererPlugin"));
     FlutterGpuTextureRendererPluginCApiRegisterWithRegistrar(
         registry->GetRegistrarForPlugin("FlutterGpuTextureRendererPluginCApi"));
+    // Vantaris: videollamada desde la sesion remota (lib/vantaris/call.dart).
+    FlutterWebRTCPluginRegisterWithRegistrar(
+        registry->GetRegistrarForPlugin("FlutterWebRTCPlugin"));
+    // Vantaris: las sesiones remotas viven en estas ventanas; aqui llegan las capturas del
+    // tecnico para copiarlas al portapapeles (flutter/lib/vantaris/capture.dart).
+    flutter::MethodChannel<> vantaris(registry->messenger(), "es.vantaris/tecnico",
+                                      &flutter::StandardMethodCodec::GetInstance());
+    vantaris.SetMethodCallHandler(
+        [](const flutter::MethodCall<>& call, std::unique_ptr<flutter::MethodResult<>> result) {
+          if (call.method_name() == "copyImage") {
+            bool ok = false;
+            if (const auto* path = std::get_if<std::string>(call.arguments())) {
+              ok = vantaris_overlay::CopyImageFile(*path);
+            }
+            result->Success(flutter::EncodableValue(ok));
+          } else if (call.method_name() == "overlay") {
+            // Solo pruebas (VANTARIS_DEMO_OVERLAY): pinta en la capa de este equipo.
+            if (const auto* payload = std::get_if<std::string>(call.arguments())) {
+              vantaris_overlay::Handle(*payload);
+            }
+            result->Success();
+          } else if (call.method_name() == "audioStart") {
+            // Argumento: la carpeta (texto) o {dir, mic} con el id del microfono elegido.
+            bool ok = false;
+            std::string dir, mic;
+            if (const auto* s = std::get_if<std::string>(call.arguments())) {
+              dir = *s;
+            } else if (const auto* m = std::get_if<flutter::EncodableMap>(call.arguments())) {
+              for (const auto& [k, v] : *m) {
+                const auto* key = std::get_if<std::string>(&k);
+                const auto* val = std::get_if<std::string>(&v);
+                if (!key || !val) continue;
+                if (*key == "dir") dir = *val;
+                if (*key == "mic") mic = *val;
+              }
+            }
+            if (!dir.empty()) ok = vantaris_audio::Start(dir, mic);
+            result->Success(flutter::EncodableValue(ok));
+          } else if (call.method_name() == "audioStop") {
+            flutter::EncodableList list;
+            for (const auto& p : vantaris_audio::Stop()) list.emplace_back(p);
+            result->Success(flutter::EncodableValue(list));
+          } else if (call.method_name() == "audioSetMic") {
+            const auto* id = std::get_if<std::string>(call.arguments());
+            vantaris_audio::SetMic(id ? *id : std::string());
+            result->Success();
+          } else if (call.method_name() == "audioStatus") {
+            // Medidor de nivel y aviso de micro en silencio (summary.dart).
+            const auto st = vantaris_audio::GetStatus();
+            flutter::EncodableList tracks;
+            for (const auto& t : st.tracks) {
+              tracks.emplace_back(flutter::EncodableMap{
+                  {flutter::EncodableValue("state"), flutter::EncodableValue(t.state)},
+                  {flutter::EncodableValue("name"), flutter::EncodableValue(t.name)},
+                  {flutter::EncodableValue("peak"), flutter::EncodableValue(t.peak)},
+                  {flutter::EncodableValue("max"), flutter::EncodableValue(t.max_peak)},
+              });
+            }
+            result->Success(flutter::EncodableValue(flutter::EncodableMap{
+                {flutter::EncodableValue("running"), flutter::EncodableValue(st.running)},
+                {flutter::EncodableValue("seconds"), flutter::EncodableValue(st.seconds)},
+                {flutter::EncodableValue("tracks"), flutter::EncodableValue(tracks)},
+            }));
+          } else if (call.method_name() == "audioInputs") {
+            std::string def;
+            flutter::EncodableList list;
+            for (const auto& [id, name] : vantaris_audio::ListInputs(&def)) {
+              list.emplace_back(flutter::EncodableMap{
+                  {flutter::EncodableValue("id"), flutter::EncodableValue(id)},
+                  {flutter::EncodableValue("name"), flutter::EncodableValue(name)},
+                  {flutter::EncodableValue("default"), flutter::EncodableValue(id == def)},
+              });
+            }
+            result->Success(flutter::EncodableValue(list));
+          } else {
+            result->NotImplemented();
+          }
+        });
   });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 

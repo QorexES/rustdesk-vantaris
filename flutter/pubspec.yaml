@@ -115,6 +115,8 @@ dependencies:
   sqflite: 2.2.0
   google_fonts: ^6.2.1
   vector_math: ^2.1.4
+  flutter_webrtc: ">=0.11.0 <0.12.0"
+  crypto: ^3.0.0 # Vantaris: SHA-256/512 de las actualizaciones (ya venía como transitiva)
 
 dev_dependencies:
   icons_launcher: ^2.0.4
@@ -157,6 +159,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
+    - assets/vantaris/ # Vantaris: marca del pulpo (lib/vantaris/marca.dart)
 
   fonts:
     - family: GestureIcons

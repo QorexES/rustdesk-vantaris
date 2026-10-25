@@ -18,7 +18,12 @@ const APP_METADATA: &[u8] = &[];
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
 const META_LINE_PREFIX_FILE: &str = "file = ";
-const APP_PREFIX: &str = "rustdesk";
+// Vantaris: carpeta propia en %LOCALAPPDATA% por variante (client-build/empaquetar-exe.sh),
+// para no pisar un RustDesk oficial instalado en el mismo equipo.
+const APP_PREFIX: &str = match option_env!("VANTARIS_PORTABLE_DIR") {
+    Some(dir) => dir,
+    None => "rustdesk",
+};
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";

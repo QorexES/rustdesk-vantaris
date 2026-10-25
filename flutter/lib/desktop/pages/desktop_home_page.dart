@@ -1,3 +1,4 @@
+import 'package:flutter_hbb/vantaris/tecnico.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -90,6 +91,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         child: loadLogo(),
       ),
       buildTip(context),
+      const VantarisTecnicoCard(), // Vantaris: técnico conectado (cuenta de Pro)
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vantaris · versión Google Play: descripción del servicio de accesibilidad en castellano
+     (la enseña Android en Ajustes › Accesibilidad). -->
+<resources>
+    <string name="accessibility_service_description">Permite que el técnico de Vantaris, con tu permiso, mueva el puntero, pulse y escriba en este dispositivo durante una sesión de soporte que tú has aceptado. No se recogen ni se guardan los datos de la pantalla fuera de la sesión. Puedes desactivarlo cuando quieras.</string>
+</resources>

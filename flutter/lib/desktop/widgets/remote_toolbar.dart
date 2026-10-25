@@ -21,6 +21,13 @@ import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
 import './popup_menu.dart';
+import '../../vantaris/draw_layer.dart';
+import '../../vantaris/call.dart';
+import '../../vantaris/guard.dart';
+import '../../vantaris/quick_replies.dart';
+import '../../vantaris/summary.dart';
+import '../../vantaris/diag_panel.dart';
+import '../../vantaris/marca.dart';
 import './kb_layout_type_chooser.dart';
 import 'package:flutter_hbb/utils/scale.dart';
 import 'package:flutter_hbb/common/widgets/custom_scale_base.dart';
@@ -846,6 +853,13 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       toolbarItems.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
     }
     toolbarItems.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
+    toolbarItems.add(_VantarisQuickReplyMenu(ffi: widget.ffi));
+    toolbarItems.add(_VantarisDrawMenu(ffi: widget.ffi));
+    toolbarItems.add(_VantarisGuardMenu(ffi: widget.ffi));
+    toolbarItems.add(_VantarisCallMenu(ffi: widget.ffi));
+    if (isWindows) toolbarItems.add(_VantarisSummaryMenu(ffi: widget.ffi));
+    toolbarItems.add(_VantarisDiagMenu(ffi: widget.ffi));
+    toolbarItems.add(_VantarisLogoMenu(ffi: widget.ffi));
     if (!isWeb) {
       toolbarItems.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
     }
@@ -2940,6 +2954,191 @@ class _VoiceCallMenu extends StatelessWidget {
       color: _ToolbarTheme.redColor,
       hoverColor: _ToolbarTheme.hoverRedColor,
     );
+  }
+}
+
+/// Vantaris: respuestas rápidas para el chat (ver lib/vantaris/quick_replies.dart).
+class _VantarisQuickReplyMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisQuickReplyMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return _IconSubmenuButton(
+      tooltip: 'Respuestas rápidas para el cliente',
+      icon: const Icon(Icons.quickreply_outlined, color: Colors.white, size: 20),
+      ffi: ffi,
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      menuChildrenGetter: (_) => [
+        ...vantarisQuickReplies().map((t) => MenuButton(
+              child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Text(t, overflow: TextOverflow.ellipsis)),
+              ffi: ffi,
+              onPressed: () {
+                vantarisSendQuickReply(ffi.chatModel, t, peerId: ffi.id);
+                showToast('Enviado al cliente: «$t»');
+              },
+            )),
+        Divider(),
+        MenuButton(
+          child: const Text('Editar frases…'),
+          ffi: ffi,
+          onPressed: () => vantarisEditQuickReplies(ffi),
+        ),
+      ],
+    );
+  }
+}
+
+/// Vantaris: activa/desactiva el lápiz para dibujar sobre la pantalla remota.
+class _VantarisDrawMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisDrawMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = VantarisDrawState.of(ffi);
+    return Obx(() => _IconMenuButton(
+          icon: const Icon(Icons.draw, color: Colors.white, size: 22),
+          tooltip: state.active.isTrue
+              ? 'Dejar de dibujar'
+              : 'Dibujar o señalar en la pantalla del equipo',
+          onPressed: state.toggle,
+          color: state.active.isTrue
+              ? _ToolbarTheme.redColor
+              : _ToolbarTheme.blueColor,
+          hoverColor: state.active.isTrue
+              ? _ToolbarTheme.hoverRedColor
+              : _ToolbarTheme.hoverBlueColor,
+        ));
+  }
+}
+
+/// Vantaris: modo «no tocar» (el usuario del equipo no puede tocar mientras trabaja el técnico).
+class _VantarisGuardMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisGuardMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = VantarisGuardState.of(ffi);
+    return Obx(() => _IconMenuButton(
+          icon: Icon(state.blocking.isTrue ? Icons.do_not_touch : Icons.back_hand_outlined,
+              color: Colors.white, size: 20),
+          tooltip: state.blocking.isTrue
+              ? 'Quitar «no tocar»: el cliente vuelve a poder usar el equipo'
+              : 'No tocar: que el cliente no pueda tocar mientras trabajas',
+          onPressed: state.toggle,
+          color: state.blocking.isTrue
+              ? _ToolbarTheme.redColor
+              : _ToolbarTheme.blueColor,
+          hoverColor: state.blocking.isTrue
+              ? _ToolbarTheme.hoverRedColor
+              : _ToolbarTheme.hoverBlueColor,
+        ));
+  }
+}
+
+/// Vantaris: grabar la asistencia para el resumen automático (ver lib/vantaris/summary.dart).
+class _VantarisSummaryMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisSummaryMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = VantarisSummaryState.of(ffi);
+    final button = Obx(() => _IconMenuButton(
+          icon: Icon(
+              state.busy.isTrue
+                  ? Icons.hourglass_top
+                  : state.recording.isTrue
+                      ? Icons.stop_circle_outlined
+                      : Icons.summarize_outlined,
+              color: Colors.white,
+              size: 20),
+          tooltip: state.recording.isTrue
+              ? 'Parar y hacer el resumen de la asistencia'
+              : 'Grabar la asistencia para el resumen automático (el cliente lo verá)',
+          onPressed: state.toggle,
+          color: state.recording.isTrue
+              ? _ToolbarTheme.redColor
+              : _ToolbarTheme.blueColor,
+          hoverColor: state.recording.isTrue
+              ? _ToolbarTheme.hoverRedColor
+              : _ToolbarTheme.hoverBlueColor,
+        ));
+    // Mientras graba: medidor de nivel (y aviso si el micro no capta nada).
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      button,
+      VantarisRecordingMeter(state: state, height: _ToolbarTheme.buttonSize),
+    ]);
+  }
+}
+
+/// Vantaris: diagnóstico del equipo y acciones rápidas (ver lib/vantaris/diag_panel.dart).
+class _VantarisDiagMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisDiagMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = VantarisDiagState.of(ffi);
+    return Obx(() => _IconMenuButton(
+          icon: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 20),
+          tooltip: 'Diagnóstico del equipo y acciones rápidas (impresoras, cajón, reiniciar, registros)',
+          onPressed: () => state.toggle(context),
+          color: state.open.isTrue ? _ToolbarTheme.redColor : _ToolbarTheme.blueColor,
+          hoverColor:
+              state.open.isTrue ? _ToolbarTheme.hoverRedColor : _ToolbarTheme.hoverBlueColor,
+        ));
+  }
+}
+
+/// Vantaris: color del logo de Vantaris en el equipo del cliente (ver lib/vantaris/marca.dart).
+class _VantarisLogoMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisLogoMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return _IconSubmenuButton(
+      tooltip: 'Logo de Vantaris en el equipo del cliente',
+      icon: const Icon(Icons.palette_outlined, color: Colors.white, size: 20),
+      ffi: ffi,
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      menuChildrenGetter: (_) => vantarisLogoColores.entries
+          .map((e) => MenuButton(
+                child: Text(e.value),
+                ffi: ffi,
+                onPressed: () => vantarisEnviarLogo(ffi, e.key),
+              ))
+          .toList(),
+    );
+  }
+}
+
+/// Vantaris: videollamada con el cliente (ver lib/vantaris/call.dart).
+class _VantarisCallMenu extends StatelessWidget {
+  final FFI ffi;
+  const _VantarisCallMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = VantarisCallState.of(ffi);
+    return Obx(() {
+      final inCall = state.call.value != null;
+      return _IconMenuButton(
+        icon: Icon(inCall ? Icons.videocam_off : Icons.video_call_outlined,
+            color: Colors.white, size: 22),
+        tooltip: inCall ? 'Colgar la videollamada' : 'Videollamada con el cliente',
+        onPressed: state.toggle,
+        color: inCall ? _ToolbarTheme.redColor : _ToolbarTheme.blueColor,
+        hoverColor: inCall ? _ToolbarTheme.hoverRedColor : _ToolbarTheme.hoverBlueColor,
+      );
+    });
   }
 }
 

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vantaris · versión Google Play (VANTARIS_PLAY=1). Se superpone al manifiesto de main solo en release.
+  Play no deja que una app se actualice por fuera de la tienda: fuera el permiso de instalar paquetes
+  y el receptor del actualizador propio. El almacenamiento amplio ya lo quita el manifiesto de main
+  (RustDesk 1.5.0 transfiere archivos por la carpeta propia de la app y el selector del sistema);
+  se repite aquí por si alguna dependencia lo vuelve a meter.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+
+    <application>
+        <receiver
+            android:name="com.carriez.flutter_hbb.VantarisUpdateReceiver"
+            tools:node="remove" />
+    </application>
+
+</manifest>

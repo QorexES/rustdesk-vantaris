@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
+import 'package:flutter_hbb/vantaris/alta.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
 import 'package:get/get.dart';
 import '../../common.dart';
@@ -8,6 +9,7 @@ import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
+import '../../vantaris/play.dart';
 
 abstract class PageShape extends Widget {
   final String title = "";
@@ -39,10 +41,16 @@ class HomePageState extends State<HomePage> {
     });
   }
 
+  /// Vantaris Play: la pestaña de inicio es «Compartir pantalla», no el Chat.
+  int get _inicio =>
+      kVantarisPlay && _chatPageTabIndex >= 0 ? _chatPageTabIndex + 1 : 0;
+
   @override
   void initState() {
     super.initState();
     initPages();
+    _selectedIndex = _inicio;
+    vantarisAltaPendiente(); // Vantaris: alta hecha por cable (provisionar-android.ps1)
   }
 
   void initPages() {
@@ -63,9 +71,9 @@ class HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return WillPopScope(
         onWillPop: () async {
-          if (_selectedIndex != 0) {
+          if (_selectedIndex != _inicio) {
             setState(() {
-              _selectedIndex = 0;
+              _selectedIndex = _inicio;
             });
           } else {
             return true;
@@ -150,7 +158,7 @@ class HomePageState extends State<HomePage> {
         ],
       );
     }
-    return Text(bind.mainGetAppNameSync());
+    return Text(kVantarisPlay ? kVantarisNombre : bind.mainGetAppNameSync());
   }
 }
 

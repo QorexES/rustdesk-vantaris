@@ -21,6 +21,9 @@ import '../widgets/deploy_dialog.dart';
 import '../widgets/dialog.dart';
 import 'home_page.dart';
 import 'scan_page.dart';
+import '../../vantaris/marca.dart';
+import '../../vantaris/update/updater.dart';
+import '../../vantaris/play.dart';
 
 class SettingsPage extends StatefulWidget implements PageShape {
   @override
@@ -300,7 +303,15 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         Align(
           alignment: Alignment.center,
           child: loadLogo(),
-        )
+        ),
+        // Vantaris: color del logo según el cliente
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Logo de Vantaris',
+                  style: Theme.of(context).textTheme.titleSmall)
+              .marginOnly(left: 16, top: 16),
+        ),
+        const VantarisLogoSelector(),
       ],
     ));
     final List<AbstractSettingsTile> enhancementsTiles = [];
@@ -629,7 +640,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, toValue);
         }));
 
-    if (!bind.isCustomClient()) {
+    if (!bind.isCustomClient() && !kVantarisOwnUpdates) {
       enhancementsTiles.add(
         SettingsTile.switchTile(
           initialValue: _checkUpdateOnStartup,
@@ -1025,12 +1036,13 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           tiles: [
             SettingsTile(
                 onPressed: (context) async {
-                  await launchUrl(Uri.parse(url));
+                  await launchUrl(Uri.parse(
+                      kVantarisPlay ? kVantarisCodigoFuenteUrl : url));
                 },
                 title: Text(translate("Version: ") + version),
                 value: Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('rustdesk.com',
+                  child: Text(kVantarisPlay ? 'Código fuente (AGPL)' : 'rustdesk.com',
                       style: TextStyle(
                         decoration: TextDecoration.underline,
                       )),
@@ -1063,7 +1075,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile(
               title: Text(translate("Privacy Statement")),
               onPressed: (context) =>
-                  launchUrlString('https://rustdesk.com/privacy.html'),
+                  launchUrlString(kVantarisPlay
+                      ? kVantarisPrivacidadUrl // Vantaris Play: nuestra política
+                      : 'https://rustdesk.com/privacy.html'),
               leading: Icon(Icons.privacy_tip),
             )
           ],

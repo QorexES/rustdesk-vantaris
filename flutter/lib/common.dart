@@ -46,6 +46,10 @@ import 'package:flutter_hbb/native/win32.dart'
 import 'package:flutter_hbb/native/common.dart'
     if (dart.library.html) 'package:flutter_hbb/web/common.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
+import 'package:flutter_hbb/vantaris/marca.dart';
+import 'package:flutter_hbb/vantaris/tecnico.dart';
+import 'package:flutter_hbb/vantaris/update/updater.dart';
+import 'package:flutter_hbb/vantaris/play.dart';
 
 final globalKey = GlobalKey<NavigatorState>();
 final navigationBarKey = GlobalKey();
@@ -2258,7 +2262,9 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
   if (cmdArgs != null && cmdArgs.isNotEmpty) {
     args = cmdArgs;
     // rustdesk <uri link>
-    if (args[0].startsWith(bind.mainUriPrefixSync())) {
+    // Vantaris: el Técnico abre también los rustdesk:// de Falcon (ver vantaris/tecnico.dart).
+    if (args[0].startsWith(bind.mainUriPrefixSync()) ||
+        (vantarisEsTecnico && args[0].startsWith('rustdesk://'))) {
       final uri = Uri.tryParse(args[0]);
       if (uri != null) {
         args = urlLinkToCmdArgs(uri);
@@ -3819,17 +3825,12 @@ class _LogoState extends State<_Logo> {
 }
 
 // max 300 x 60
-Widget loadLogo() => const _Logo();
+// Vantaris: el logotipo del pulpo (lib/vantaris/marca.dart) en vez de assets/logo*.png.
+Widget loadLogo() => const VantarisMarca().marginOnly(left: 12, right: 12, top: 12);
 
+// Vantaris: icono del pulpo de la variante (Soporte / Técnico) en vez de assets/icon.png|svg.
 Widget loadIcon(double size) {
-  return Image.asset('assets/icon.png',
-      width: size,
-      height: size,
-      errorBuilder: (ctx, error, stackTrace) => SvgPicture.asset(
-            'assets/icon.svg',
-            width: size,
-            height: size,
-          ));
+  return SvgPicture.asset(vantarisIconoAsset, width: size, height: size);
 }
 
 var imcomingOnlyHomeSize = Size(280, 300);
@@ -4066,6 +4067,8 @@ void earlyAssert() {
 }
 
 void checkUpdate() {
+  // Vantaris: nunca se consulta a rustdesk.com; actualizaciones propias (lib/vantaris/update/).
+  if (vantarisUpdateStart()) return;
   if (!isWeb) {
     if (!bind.isCustomClient()) {
       platformFFI.registerEventHandler(
@@ -4187,7 +4190,7 @@ List<String> getPrinterNames() {
 String _appName = '';
 String get appName {
   if (_appName.isEmpty) {
-    _appName = bind.mainGetAppNameSync();
+    _appName = kVantarisPlay ? kVantarisNombre : bind.mainGetAppNameSync();
   }
   return _appName;
 }

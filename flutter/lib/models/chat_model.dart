@@ -20,6 +20,8 @@ import '../common.dart';
 import '../common/widgets/overlay.dart';
 import '../main.dart';
 import 'model.dart';
+import '../vantaris/draw.dart';
+import '../vantaris/guard.dart';
 
 class MessageKey {
   final String peerId;
@@ -351,6 +353,14 @@ class ChatModel with ChangeNotifier {
       return;
     }
     if (text.isEmpty) return;
+    // Vantaris: los trazos del lápiz llegan por el chat pero no son mensajes para el usuario.
+    if (isVantarisDrawMessage(text)) {
+      onVantarisDrawMessage(text,
+          connId: id,
+          fromController: id != clientModeID,
+          sessionId: session.sessionId);
+      return;
+    }
     if (desktopType == DesktopType.cm) {
       await showCmWindow();
     }
@@ -432,6 +442,8 @@ class ChatModel with ChangeNotifier {
     }
     insertMessage(messagekey,
         ChatMessage(text: text, user: chatUser, createdAt: DateTime.now()));
+    // Vantaris: en Android el mensaje del técnico se ve también fuera de la app.
+    if (id != clientModeID) vantarisGuardChatMessage(messagekey, text, chatUser.firstName);
     if (id == clientModeID || _currentKey.peerId.isEmpty) {
       // client or invalid
       _currentKey = messagekey;

@@ -24,6 +24,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
+import '../../vantaris/marca.dart';
+import '../../vantaris/update/updater.dart';
 
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
@@ -414,6 +416,9 @@ class _GeneralState extends State<_General> {
       children: [
         if (!isWeb) service(),
         theme(),
+        _Card(title: 'Logo de Vantaris', children: [
+          const VantarisLogoSelector()
+        ]), // Vantaris: color del logo según el cliente
         _Card(title: 'Language', children: [language()]),
         if (!isWeb) hwcodec(),
         if (!isWeb) audio(context),
@@ -482,8 +487,10 @@ class _GeneralState extends State<_General> {
   Widget other() {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
-    final showAutoUpdate = (isWindows && bind.mainIsInstalled()) ||
-    (isMacOS && bind.mainIsInstalled() && bind.mainIsInstalledDaemon(prompt: false) && !bind.isCustomClient());
+    // Vantaris: con actualizaciones propias no se enseña la casilla del RustDesk oficial.
+    final showAutoUpdate = !kVantarisOwnUpdates &&
+        ((isWindows && bind.mainIsInstalled()) ||
+            (isMacOS && bind.mainIsInstalled() && bind.mainIsInstalledDaemon(prompt: false) && !bind.isCustomClient()));
     final children = <Widget>[
       if (!isWeb && !incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
@@ -551,7 +558,7 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
-      if (!isWeb && !bind.isCustomClient())
+      if (!isWeb && !bind.isCustomClient() && !kVantarisOwnUpdates)
         _OptionCheckBox(
           context,
           'Check for software update on startup',

@@ -10,6 +10,7 @@
 #include "win32_desktop.h"
 #include "flutter_window.h"
 #include "utils.h"
+#include "vantaris_update.h"
 
 typedef char** (*FUNC_RUSTDESK_CORE_MAIN)(int*);
 typedef void (*FUNC_RUSTDESK_FREE_ARGS)( char**, int);
@@ -49,6 +50,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   for (auto& argument : command_line_arguments) {
     argument.erase(argument.find_last_not_of(" \n\r\t"));
   }
+
+  // Vantaris: actualizaciones propias (vantaris_update.cpp). «--vantaris-actualizar» no entra en Rust;
+  // en el servicio de Soporte se arranca el hilo que lo lanza cada 6 h.
+  int vantaris_update_exit = VantarisUpdateMain(command_line_arguments);
+  if (vantaris_update_exit >= 0) return vantaris_update_exit;
+  VantarisUpdateStartScheduler(command_line_arguments);
 
   int args_len = 0;
   char** c_args = rustdesk_core_main(&args_len);
