@@ -604,12 +604,23 @@ int Run(bool only_check, bool no_install) {
                  L"-Command \"Expand-Archive -LiteralPath '" + zip + L"' -DestinationPath '" + dir + L"' -Force\"",
                  10 * 60 * 1000);
   }
+  // El paquete trae el programa con el mismo nombre que el instalado (el app-name de la config de Pro,
+  // p. ej. «VantarisSoporte.exe»). Antes solo se buscaba «vantaris-*.exe» y desde el cambio de nombre
+  // ninguna actualización encontraba el programa (02-11). Se mantiene ese patrón como respaldo.
   std::wstring exe;
-  WIN32_FIND_DATAW fd;
-  HANDLE h = FindFirstFileW((dir + L"\\vantaris-*.exe").c_str(), &fd);
-  if (h != INVALID_HANDLE_VALUE) {
-    exe = dir + L"\\" + fd.cFileName;
-    FindClose(h);
+  {
+    std::wstring me = ExePath();
+    size_t slash = me.find_last_of(L"\\/");
+    std::wstring same = dir + L"\\" + (slash == std::wstring::npos ? me : me.substr(slash + 1));
+    if (GetFileAttributesW(same.c_str()) != INVALID_FILE_ATTRIBUTES) exe = same;
+  }
+  if (exe.empty()) {
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((dir + L"\\vantaris-*.exe").c_str(), &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+      exe = dir + L"\\" + fd.cFileName;
+      FindClose(h);
+    }
   }
   if (rc != 0 || exe.empty()) {
     Log("no se pudo descomprimir el paquete o no trae el programa");
