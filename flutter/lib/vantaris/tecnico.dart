@@ -31,7 +31,8 @@ import '../models/platform_model.dart';
 const _kTeal = Color(0xFF03B5A5);
 
 bool get vantarisEsTecnico {
-  if (!isDesktop) return false;
+  // Windows y Android (el Técnico de Android es para cuando se está fuera, ver mobile/pages/remote_page.dart).
+  if (!isDesktop && !isAndroid) return false;
   const v = String.fromEnvironment('VANTARIS_VARIANT');
   if (v.isNotEmpty) return v == 'tecnico';
   return bind.isOutgoingOnly() || Platform.environment['VANTARIS_VARIANT'] == 'tecnico';
@@ -54,7 +55,7 @@ Future<bool> vantarisTecnicoPuedeConectar() async {
   _log('conexión parada: sin sesión de técnico, se pide el login');
   try {
     // Con --connect o un enlace la ventana principal está oculta: sacarla para que se vea el login.
-    await windowOnTop(null);
+    if (isDesktop) await windowOnTop(null);
     showToast('Entra con tu cuenta de técnico para conectar.',
         timeout: const Duration(seconds: 4));
     await loginDialog();

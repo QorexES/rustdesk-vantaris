@@ -242,6 +242,7 @@ class MainService : Service() {
         super.onCreate()
         Log.d(logTag,"MainService onCreate, sdk int:${Build.VERSION.SDK_INT} reuseVirtualDisplay:$reuseVirtualDisplay")
         FFI.init(this)
+        VantarisA11y.ensureEnabled(this) // Vantaris: por si Android quitó el «Control de entrada»
         HandlerThread("Service", Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
             serviceLooper = looper
@@ -578,6 +579,15 @@ class MainService : Service() {
         }
         if (mediaProjection == null) {
             Log.w(logTag, "startCapture fail,mediaProjection is null")
+            // Vantaris: la captura se perdió (otra app de control remoto se la quedó al arrancar,
+            // o Android la paró). Se vuelve a pedir y, al llegar, replaceMediaProjection arranca
+            // la captura sola. Con appops PROJECT_MEDIA=allow (provisionar-android.ps1) no sale
+            // ningún diálogo; sin él, el cliente ve el aviso de Android en vez de pantalla negra.
+            if (!captureRestartPending) {
+                captureRestartPending = true
+                captureRestartInVoiceCall = inVoiceCall
+                requestMediaProjection(true)
+            }
             return false
         }
         captureRestartInVoiceCall = inVoiceCall

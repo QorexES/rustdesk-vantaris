@@ -14,6 +14,8 @@ package com.carriez.flutter_hbb
 //    la app y activa «Iniciar al arrancar»; al abrir la app, Dart la aplica y la borra en el acto.
 //      --method estado  ->  "hecha" | "pendiente" | "baja-pendiente" | "sin-alta"
 //      --method baja    ->  al abrir la app se quita el alta (vuelve a pedir «Aceptar»; equipo retirado)
+//      --method id      ->  ID de RustDesk del equipo (lo guarda Dart al abrir la app; "" si aún no).
+//                           El script lo usa para pedir al servidor la contraseña de ESTE equipo.
 
 import android.content.ContentProvider
 import android.content.ContentValues
@@ -31,6 +33,7 @@ object VantarisAlta {
     private const val KEY_PENDIENTE = "VANTARIS_ALTA_PENDIENTE"
     private const val KEY_HECHA = "VANTARIS_ALTA_HECHA"
     private const val KEY_BAJA = "VANTARIS_BAJA_PENDIENTE"
+    private const val KEY_ID = "VANTARIS_ID"
     private val VALIDA = Regex("^[\\x21-\\x7E]{8,64}$") // ASCII visible, sin espacios
 
     private fun prefs(ctx: Context) =
@@ -53,6 +56,11 @@ object VantarisAlta {
                 Log.i(TAG, "alta aplicada")
                 "{}"
             }
+            // ID del equipo, para el script por cable.
+            "id" -> {
+                p.edit().putString(KEY_ID, a.optString("id")).apply()
+                "{}"
+            }
             "baja-hecha" -> {
                 p.edit().remove(KEY_PENDIENTE).remove(KEY_BAJA).putBoolean(KEY_HECHA, false)
                     .putBoolean(KEY_START_ON_BOOT_OPT, false).apply()
@@ -72,6 +80,8 @@ object VantarisAlta {
             else -> "sin-alta"
         }
     }
+
+    fun id(ctx: Context): String = prefs(ctx).getString(KEY_ID, "") ?: ""
 
     fun dejarPendiente(ctx: Context, pwd: String) {
         prefs(ctx).edit().putString(KEY_PENDIENTE, pwd).remove(KEY_BAJA).putBoolean(KEY_START_ON_BOOT_OPT, true).apply()
@@ -106,6 +116,7 @@ class VantarisAltaProvider : ContentProvider() {
                 }
             }
             "estado" -> out.putString("resultado", VantarisAlta.estado(ctx))
+            "id" -> out.putString("resultado", VantarisAlta.id(ctx))
             "baja" -> {
                 VantarisAlta.dejarBaja(ctx)
                 out.putString("resultado", "baja-pendiente: abre la app para aplicarla")

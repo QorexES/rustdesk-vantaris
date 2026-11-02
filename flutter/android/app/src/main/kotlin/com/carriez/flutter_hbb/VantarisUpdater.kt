@@ -6,9 +6,10 @@ package com.carriez.flutter_hbb
 // (lib/vantaris/update/updater.dart). Aquí solo se entrega a Android, que además exige que el APK
 // esté firmado con el mismo certificado que la app instalada y que el versionCode no baje.
 //
-// Sin root ni Device Owner, Android SIEMPRE pide confirmación al usuario (y la primera vez, el permiso
-// «Instalar aplicaciones desconocidas» para esta app). Si los equipos fueran dedicados y la app
-// estuviera como Device Owner, el mismo commit instalaría sin preguntar (ver actualizaciones.md).
+// Android 12+: si esta app es la «instaladora» de sí misma (provisionar-android.ps1 instala con
+// `-i <paquete>` y da REQUEST_INSTALL_PACKAGES por appops) se actualiza SIN preguntar a nadie
+// (USER_ACTION_NOT_REQUIRED + permiso UPDATE_PACKAGES_WITHOUT_USER_ACTION). Pensado para pantallas
+// sin nadie delante (KDS en el techo). Si Android no lo permite, sale su confirmación como antes.
 
 import android.app.Activity
 import android.app.PendingIntent
@@ -28,7 +29,7 @@ object VantarisUpdater {
     private const val TAG = "VantarisUpdater"
 
     /** Devuelve "ok" (el sistema mostrará su pantalla de confirmación), "permiso" o "error: …". */
-    fun install(activity: Activity, path: String): String {
+    fun install(activity: Context, path: String): String {
         // Versión Google Play: las actualizaciones las da Play (y no hay permiso para instalar).
         if (BuildConfig.VANTARIS_PLAY) return "error: en la versión de Google Play se actualiza desde la tienda"
         val apk = File(path)
@@ -40,7 +41,7 @@ object VantarisUpdater {
                 Intent(
                     Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:" + activity.packageName)
-                )
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             return "permiso"
         }
@@ -49,6 +50,9 @@ object VantarisUpdater {
             val params =
                 PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
             params.setAppPackageName(activity.packageName) // solo se acepta un APK de esta misma app
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            }
             val id = installer.createSession(params)
             installer.openSession(id).use { session ->
                 apk.inputStream().use { input ->

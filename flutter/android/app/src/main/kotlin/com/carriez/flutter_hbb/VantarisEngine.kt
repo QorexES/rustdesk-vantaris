@@ -86,6 +86,10 @@ object VantarisEngine {
                         VantarisGuard.handle(app, call.arguments as String)
                         result.success(null)
                     }
+                    "vantaris_install_apk" -> {
+                        // Actualización sin pantalla (equipo desatendido): ver VantarisUpdater.
+                        result.success(VantarisUpdater.install(app, call.arguments as String))
+                    }
                     "vantaris_front" -> {
                         bringToFront(app)
                         result.success(null)

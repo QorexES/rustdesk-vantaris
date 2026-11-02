@@ -22,6 +22,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Vantaris: actualizarse a sí misma (el usuario confirma) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Vantaris: actualizarse SIN confirmación (Android 12+, si la instaló ella misma: provisionar-android.ps1) -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Vantaris: volver a activar su accesibilidad si Android la quita (solo se concede por adb) -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
@@ -49,6 +54,8 @@
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <!-- Vantaris: tras actualizar la app, Android la mata; vuelve a arrancar el servicio sola -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <!--ACTION_BOOT_COMPLETED for debug test on no root device-->
                 <action android:name="com.carriez.flutter_hbb.DEBUG_BOOT_COMPLETED" />
             </intent-filter>

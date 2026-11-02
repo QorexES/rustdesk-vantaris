@@ -1,8 +1,9 @@
 // Vantaris: «alta del equipo» para el acceso desatendido (Android, variante Soporte).
 //
 // Sin alta, RustDesk pide que alguien pulse «Aceptar» en la tablet cada vez que entra un técnico.
-// Con alta, el técnico entra con la CONTRASEÑA PERMANENTE DE ESE EQUIPO (una por equipo, la pone
-// el instalador; nunca va en el binario) y nadie tiene que tocar nada. El cliente sigue sabiendo
+// Con alta, el técnico entra con la CONTRASEÑA PERMANENTE DE ESE EQUIPO (una por equipo, la calcula el
+// servidor a partir del ID y nadie la ve ni la apunta; nunca va en el binario) y nadie tiene que tocar
+// nada. El técnico con sesión la pide al servidor al conectar (acceso.dart). El cliente sigue sabiendo
 // siempre que hay alguien: la píldora «Técnico Vantaris conectado» (guard.dart) no depende de esto.
 //
 // Qué deja fijado el alta:
@@ -30,6 +31,7 @@ import '../common.dart';
 import '../consts.dart';
 import '../models/platform_model.dart';
 import '../models/server_model.dart';
+import 'acceso.dart';
 import 'play.dart';
 
 // Mismo canal que usa native_model.dart; gFFI.invokeMethod espera un bool y aquí vuelve JSON.
@@ -91,6 +93,9 @@ Future<void> vantarisQuitarAlta() async {
 Future<void> vantarisAltaPendiente() async {
   if (!vantarisAltaAplica) return;
   try {
+    // El ID, para que provisionar-android.ps1 pida al servidor la contraseña de este equipo.
+    final id = await bind.mainGetMyId();
+    if (id.isNotEmpty) await _canal(jsonEncode({'op': 'id', 'id': id}));
     final res = await _canal(jsonEncode({'op': 'pendiente'}));
     final m = jsonDecode(res) as Map;
     if (m['baja'] == true) {
@@ -188,7 +193,8 @@ class _VantarisAltaCardState extends State<VantarisAltaCard> {
   }
 
   Future<void> _abrirAlta({required bool cambiar}) async {
-    final ctrl = TextEditingController(text: vantarisGenerarPassword());
+    final usuario = TextEditingController();
+    final clave = TextEditingController();
     var arranque = true;
     String? error;
     var ocupado = false;
@@ -197,46 +203,59 @@ class _VantarisAltaCardState extends State<VantarisAltaCard> {
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setState) {
+        Future<void> enviar() async {
+          if (usuario.text.trim().isEmpty || clave.text.isEmpty) {
+            setState(() => error = 'Escribe tu usuario y tu contraseña de técnico.');
+            return;
+          }
+          setState(() {
+            ocupado = true;
+            error = null;
+          });
+          // La contraseña del equipo la da el servidor (es solo de este equipo y nadie la ve):
+          // los técnicos con sesión entran sin escribirla. Ver acceso.dart.
+          final (pwd, fallo) = await vantarisClaveParaAlta(usuario.text.trim(), clave.text);
+          final err = fallo ?? await _alta(pwd!, arranque);
+          if (err != null) {
+            setState(() {
+              error = err;
+              ocupado = false;
+            });
+          } else if (context.mounted) {
+            Navigator.pop(context, true);
+          }
+        }
+
         return AlertDialog(
-          title: Text(cambiar ? 'Cambiar la contraseña del equipo' : 'Alta del equipo (instalador)'),
+          title: Text(cambiar ? 'Volver a dar de alta el equipo' : 'Alta del equipo (instalador)'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Con esta contraseña los técnicos entrarán sin que nadie tenga que '
-                  'aceptar. Es solo de este equipo.'),
+              const Text('Entra con tu cuenta de técnico de Vantaris. El equipo queda con una '
+                  'contraseña propia que nadie tiene que apuntar: los técnicos con sesión entran '
+                  'sin escribirla y sin que nadie tenga que aceptar.'),
               const SizedBox(height: 12),
               Text('ID del equipo: $id', style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextField(
-                controller: ctrl,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 18),
-                decoration: InputDecoration(
-                  labelText: 'Contraseña del equipo',
-                  errorText: error,
-                  suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
-                    IconButton(
-                      tooltip: 'Generar otra',
-                      icon: const Icon(Icons.refresh),
-                      onPressed: () => setState(() => ctrl.text = vantarisGenerarPassword()),
-                    ),
-                    IconButton(
-                      tooltip: 'Copiar',
-                      icon: const Icon(Icons.copy),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: 'ID $id  ·  contraseña ${ctrl.text}'));
-                        showToast('Copiado');
-                      },
-                    ),
-                  ]),
-                ),
+                controller: usuario,
+                enabled: !ocupado,
+                autocorrect: false,
+                decoration: const InputDecoration(labelText: 'Usuario de técnico'),
               ),
-              const SizedBox(height: 8),
-              const Text('Apúntala en la ficha del local (Falcon / libreta del servidor) ANTES de '
-                  'continuar: después no se puede volver a ver.',
-                  style: TextStyle(fontSize: 12, color: _kAmbar)),
+              TextField(
+                controller: clave,
+                enabled: !ocupado,
+                obscureText: true,
+                decoration: InputDecoration(labelText: 'Contraseña de técnico', errorText: error),
+                onSubmitted: (_) => ocupado ? null : enviar(),
+              ),
+              const SizedBox(height: 4),
+              const Text('Tu sesión solo se usa un momento para el alta y se cierra al terminar.',
+                  style: TextStyle(fontSize: 12)),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: arranque,
-                onChanged: (v) => setState(() => arranque = v ?? true),
+                onChanged: ocupado ? null : (v) => setState(() => arranque = v ?? true),
                 title: const Text('Arrancar solo al encender el equipo'),
               ),
             ]),
@@ -244,21 +263,10 @@ class _VantarisAltaCardState extends State<VantarisAltaCard> {
           actions: [
             TextButton(onPressed: ocupado ? null : () => Navigator.pop(context, false), child: const Text('Cancelar')),
             ElevatedButton(
-              onPressed: ocupado
-                  ? null
-                  : () async {
-                      setState(() => ocupado = true);
-                      final err = await _alta(ctrl.text.trim(), arranque);
-                      if (err != null) {
-                        setState(() {
-                          error = err;
-                          ocupado = false;
-                        });
-                      } else if (context.mounted) {
-                        Navigator.pop(context, true);
-                      }
-                    },
-              child: Text(cambiar ? 'Cambiar' : 'Dar de alta'),
+              onPressed: ocupado ? null : enviar,
+              child: ocupado
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(cambiar ? 'Volver a dar de alta' : 'Dar de alta'),
             ),
           ],
         );

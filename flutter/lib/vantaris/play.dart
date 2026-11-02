@@ -17,7 +17,10 @@ import '../common.dart';
 const kVantarisPlay = bool.fromEnvironment('VANTARIS_PLAY');
 
 /// Nombre visible (el app-name de la config Pro no admite espacios: «VantarisSoporte»).
-const kVantarisNombre = 'Vantaris Soporte';
+/// La variante sale de build-vantaris.sh (--dart-define=VANTARIS_VARIANT).
+const kVantarisNombre = String.fromEnvironment('VANTARIS_VARIANT') == 'tecnico'
+    ? 'Vantaris Técnico'
+    : 'Vantaris Soporte';
 
 /// Política de privacidad (Ajustes › Declaración de privacidad).
 const kVantarisPrivacidadUrl = 'https://vantaris.es/legal/privacidad-soporte-remoto';

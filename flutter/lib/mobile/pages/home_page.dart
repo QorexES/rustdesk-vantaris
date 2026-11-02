@@ -158,7 +158,7 @@ class HomePageState extends State<HomePage> {
         ],
       );
     }
-    return Text(kVantarisPlay ? kVantarisNombre : bind.mainGetAppNameSync());
+    return Text((kVantarisPlay || isAndroid) ? kVantarisNombre : bind.mainGetAppNameSync());
   }
 }
 

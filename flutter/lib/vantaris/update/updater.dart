@@ -28,6 +28,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../alta.dart' show vantarisAltaHecha;
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -156,6 +157,7 @@ Future<VantarisManifest?> vantarisCheckNow() async {
     _log('VERSIÓN NUEVA ${m.version} build ${m.build} (instalada $kVantarisBuild), firma OK');
     vantarisUpdateAvailable.value = m;
     if (isWindows) _askTecnico(m);
+    if (isAndroid) _autoAndroid();
     return m;
   } on VantarisManifestError catch (e) {
     _log('MANIFIESTO RECHAZADO ($url): $e');
@@ -334,6 +336,22 @@ Future<bool> _installWindows(VantarisManifest m) async {
 // ---------------------------------------------------------------- Soporte (Android)
 
 const _android = MethodChannel('mChannel');
+
+/// Equipo desatendido (dado de alta: entra el técnico sin «Aceptar»): se actualiza solo, sin tarjeta.
+/// Una pantalla de cocina en el techo no tiene a nadie que pulse «Actualizar». Nunca con un técnico
+/// dentro: se reintenta cada 10 minutos hasta que cuelgue.
+Future<void> _autoAndroid() async {
+  if (kVantarisPlay || !await vantarisAltaHecha()) return;
+  if (gFFI.serverModel.clients.isNotEmpty) {
+    _log('técnico conectado: la actualización espera 10 minutos');
+    Timer(const Duration(minutes: 10), () {
+      if (vantarisUpdateAvailable.value != null) _autoAndroid();
+    });
+    return;
+  }
+  _log('equipo desatendido: actualizo sin preguntar');
+  await vantarisInstallAndroid();
+}
 
 /// Descarga, comprueba y abre el instalador del sistema. El usuario confirma en la pantalla de Android.
 Future<void> vantarisInstallAndroid() async {

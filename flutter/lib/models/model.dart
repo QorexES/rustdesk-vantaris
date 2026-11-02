@@ -43,6 +43,7 @@ import '../common/widgets/dialog.dart';
 import 'input_model.dart';
 import 'platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
+import 'package:flutter_hbb/vantaris/acceso.dart';
 import 'package:flutter_hbb/vantaris/capture.dart';
 
 import 'package:flutter_hbb/generated_bridge.dart'
@@ -916,7 +917,10 @@ class FfiModel with ChangeNotifier {
     } else if (type == 'input-2fa') {
       enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
-      enterPasswordDialog(sessionId, dialogManager);
+      // Vantaris: con sesión de técnico, la contraseña del equipo la da el servidor.
+      vantarisEntrarSinClave(sessionId, peerId).then((hecho) {
+        if (!hecho) enterPasswordDialog(sessionId, dialogManager);
+      });
     } else if (type == 'terminal-admin-login') {
       enterUserLoginDialog(
           sessionId, dialogManager, 'terminal-admin-login-tip');

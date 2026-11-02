@@ -3,10 +3,11 @@
 // La señalización (oferta, respuesta y candidatos ICE) viaja por el canal de la pizarra (ver
 // draw.dart), así que no hace falta otro servidor para montarla: basta la conexión de RustDesk
 // ya abierta. El vídeo y el audio van directos entre los dos equipos (STUN); si las redes no lo
-// permiten hace falta un TURN: el de soporte.vantaris.es (coturn, RemoteControl/deploy/pro) va
-// dentro del Técnico al compilar (--dart-define=VANTARIS_TURN, lo pone build-vantaris.sh desde
-// secrets/turn-vantaris.json); la opción local «vantaris-turn» o la variable VANTARIS_TURN lo
-// sustituyen. JSON con urls/username/credential; el técnico lo manda en la oferta.
+// permiten hace falta un TURN: el de soporte.vantaris.es (coturn, RemoteControl/deploy/pro). Al
+// llamar, el Técnico pide credenciales temporales con su sesión a <api-server>/turn/credenciales
+// (caducan a las 12 h; no va ninguna contraseña dentro del programa). La opción local «vantaris-turn»
+// o la variable VANTARIS_TURN la sustituyen para pruebas. JSON con urls/username/credential; el
+// técnico lo manda en la oferta.
 //
 // Órdenes: «V <llamada> <i>/<n> <trozo>»: un JSON en base64url partido en trozos (una SDP ocupa
 // varios KB). Tipos: offer, answer, ice, bye, decline.
@@ -23,6 +24,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:get/get.dart' hide navigator;
+import 'package:http/http.dart' as http;
 
 import '../common.dart';
 import '../models/model.dart';
@@ -31,27 +33,46 @@ import 'draw.dart';
 import 'play.dart';
 
 const _kChunk = 3000;
-const _kTurnCompilado = String.fromEnvironment('VANTARIS_TURN');
 const _kRingTimeout = Duration(seconds: 45);
 
-List<Map<String, dynamic>> _defaultIce() {
-  final servers = <Map<String, dynamic>>[
-    {'urls': 'stun:soporte.vantaris.es:3478'},
-    // Vantaris Play: solo nuestro STUN/TURN (sin terceros).
-    if (!kVantarisPlay) {'urls': 'stun:stun.l.google.com:19302'},
-  ];
+List<Map<String, dynamic>> _defaultIce() => [
+      {'urls': 'stun:soporte.vantaris.es:3478'},
+      // Vantaris Play: solo nuestro STUN/TURN (sin terceros).
+      if (!kVantarisPlay) {'urls': 'stun:stun.l.google.com:19302'},
+    ];
+
+/// TURN para la oferta: el de pruebas si está puesto; si no, credenciales temporales del servidor con
+/// la sesión del técnico. Sin sesión o sin servidor, null (la llamada sale solo con STUN).
+Future<Map<String, dynamic>?> _turn() async {
   String turn = '';
   try {
     turn = Platform.environment['VANTARIS_TURN'] ?? '';
   } catch (_) {}
   if (turn.isEmpty) turn = bind.mainGetLocalOption(key: 'vantaris-turn');
-  if (turn.isEmpty) turn = _kTurnCompilado;
-  if (turn.isNotEmpty) {
+  if (turn.isEmpty) {
     try {
-      servers.add(Map<String, dynamic>.from(jsonDecode(turn) as Map));
-    } catch (_) {}
+      final api = await bind.mainGetApiServer();
+      final token = bind.mainGetLocalOption(key: 'access_token');
+      if (api.isEmpty || token.isEmpty) return null;
+      final r = await http
+          .get(Uri.parse('$api/turn/credenciales'), headers: getHttpHeaders())
+          .timeout(const Duration(seconds: 6));
+      if (r.statusCode != 200) {
+        debugPrint('Vantaris: TURN sin credenciales (${r.statusCode})');
+        return null;
+      }
+      turn = r.body;
+    } catch (e) {
+      debugPrint('Vantaris: TURN sin credenciales: $e');
+      return null;
+    }
   }
-  return servers;
+  try {
+    final m = Map<String, dynamic>.from(jsonDecode(turn) as Map);
+    return {'urls': m['urls'], 'username': m['username'], 'credential': m['credential']};
+  } catch (_) {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------- troceado de mensajes
@@ -101,6 +122,9 @@ class VantarisCall {
   final void Function(String line) _sendLine;
   final void Function(VantarisCall call) onEnded;
   List<Map<String, dynamic>> iceServers;
+  // Prueba del TURN: VANTARIS_TURN_RELE=1 en el técnico obliga a los dos lados a ir por el relé
+  // (como si los dos estuvieran tras CG-NAT). Viaja en la oferta.
+  bool soloRele = false;
 
   VantarisCall(
       {required this.id,
@@ -162,6 +186,7 @@ class VantarisCall {
     final pc = await createPeerConnection({
       'iceServers': iceServers,
       'sdpSemantics': 'unified-plan',
+      if (soloRele) 'iceTransportPolicy': 'relay',
     });
     _pc = pc;
     pc.onIceCandidate = (c) {
@@ -217,11 +242,16 @@ class VantarisCall {
   Future<void> start() async {
     status.value = 'Llamando…';
     try {
+      final turn = await _turn();
+      if (turn != null) iceServers = [...iceServers, turn];
+      try {
+        soloRele = turn != null && Platform.environment['VANTARIS_TURN_RELE'] == '1';
+      } catch (_) {}
       await _init();
       await _createPc();
       final offer = await _pc!.createOffer();
       await _pc!.setLocalDescription(offer);
-      _send({'t': 'offer', 'sdp': offer.sdp, 'ice': iceServers});
+      _send({'t': 'offer', 'sdp': offer.sdp, 'ice': iceServers, if (soloRele) 'rele': true});
       _ringTimer = Timer(_kRingTimeout, () {
         if (!connected.value) hangup(reason: 'No contesta.');
       });
@@ -237,6 +267,7 @@ class VantarisCall {
     if (ice is List) {
       iceServers = ice.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
+    soloRele = offer['rele'] == true;
     try {
       await _init();
       await _createPc();

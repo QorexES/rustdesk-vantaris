@@ -24,6 +24,11 @@ import '../../models/platform_model.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
+import '../../vantaris/call.dart';
+import '../../vantaris/diag_panel.dart';
+import '../../vantaris/draw_layer.dart';
+import '../../vantaris/guard.dart';
+import '../../vantaris/tecnico.dart';
 
 final initText = '1' * 1024;
 
@@ -151,6 +156,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // "Connecting...". Dispatching it here makes teardown happen synchronously on
     // pop; the `sessionClose` in `gFFI.close()` becomes a no-op once removed.
     unawaited(bind.sessionClose(sessionId: sessionId));
+    if (vantarisEsTecnico) {
+      VantarisDrawState.disposeFor(sessionId);
+      VantarisGuardState.disposeFor(sessionId);
+      VantarisCallState.disposeFor(sessionId);
+      VantarisDiagState.disposeFor(sessionId);
+    }
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
     gFFI.dialogManager.hideMobileActionsOverlay(store: false);
@@ -626,6 +637,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   ))
                         ]) +
                   [
+                    if (vantarisEsTecnico)
+                      IconButton(
+                        color: Colors.white,
+                        tooltip: 'Herramientas Vantaris',
+                        icon: const Icon(Icons.support_agent),
+                        onPressed: _vantarisHerramientas,
+                      ),
                     IconButton(
                       color: Colors.white,
                       icon: Icon(Icons.more_vert),
@@ -645,6 +663,53 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       },
               )),
         ],
+      ),
+    );
+  }
+
+  /// Vantaris: lo mismo que la barra del Técnico de escritorio, en una hoja de abajo.
+  void _vantarisHerramientas() {
+    final draw = VantarisDrawState.of(gFFI);
+    final guard = VantarisGuardState.of(gFFI);
+    final call = VantarisCallState.of(gFFI);
+    final diag = VantarisDiagState.of(gFFI);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Obx(() => Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(
+                leading: const Icon(Icons.draw),
+                title: Text(draw.active.isTrue ? 'Quitar la pizarra' : 'Pizarra (señalar en su pantalla)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  draw.toggle();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.do_not_touch),
+                title: const Text('«No tocar» (bloquear su pantalla mientras trabajo)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  guard.toggle();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.medical_services_outlined),
+                title: const Text('Diagnóstico del equipo y del TPV'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  diag.toggle(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam),
+                title: const Text('Videollamada'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  call.toggle();
+                },
+              ),
+            ])),
       ),
     );
   }
@@ -702,6 +767,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           ];
           if (showCursorPaint) {
             paints.add(CursorPaint(widget.id));
+          }
+          if (vantarisEsTecnico) {
+            // Vantaris: pizarra y videollamada encima de la imagen (como en escritorio).
+            paints.add(VantarisDrawLayer(ffi: gFFI));
+            paints.add(VantarisCallPanel(ffi: gFFI));
           }
           if (gFFI.ffiModel.touchMode) {
             paints.add(FloatingMouse(

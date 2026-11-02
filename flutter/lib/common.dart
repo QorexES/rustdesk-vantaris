@@ -2633,6 +2633,9 @@ connect(BuildContext context, String id,
       });
     }
   } else {
+    // Vantaris: el Técnico de Android también exige la cuenta antes de conectar (en escritorio lo hace
+    // multi_window_manager al abrir la ventana).
+    if (isAndroid && !await vantarisTecnicoPuedeConectar()) return;
     if (isFileTransfer) {
       if (isWeb) {
         Navigator.push(
@@ -4190,7 +4193,7 @@ List<String> getPrinterNames() {
 String _appName = '';
 String get appName {
   if (_appName.isEmpty) {
-    _appName = kVantarisPlay ? kVantarisNombre : bind.mainGetAppNameSync();
+    _appName = (kVantarisPlay || isAndroid) ? kVantarisNombre : bind.mainGetAppNameSync();
   }
   return _appName;
 }
