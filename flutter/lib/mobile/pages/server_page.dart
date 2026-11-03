@@ -1,4 +1,5 @@
 import 'package:flutter_hbb/vantaris/alta.dart';
+import 'package:flutter_hbb/vantaris/cobertura/entrada.dart';
 import 'package:flutter_hbb/vantaris/guard.dart';
 import 'package:flutter_hbb/vantaris/marca.dart';
 import 'package:flutter_hbb/vantaris/permiso_pizarra.dart';
@@ -221,6 +222,7 @@ class _ServerPageState extends State<ServerPage> {
                         const VantarisPermisoCapaCard(), // Vantaris: permiso de la pizarra
                         const VantarisAltaCard(), // Vantaris: acceso desatendido
                         const VantarisUpdateBanner(),
+                        const VantarisCoberturaCard(), // Vantaris: cobertura del local
                         gFFI.serverModel.isStart
                             ? ServerInfo()
                             : ServiceNotRunningNotification(),

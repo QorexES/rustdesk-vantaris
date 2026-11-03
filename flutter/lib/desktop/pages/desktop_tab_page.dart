@@ -6,6 +6,7 @@ import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/vantaris/cobertura/entrada.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
 // import 'package:flutter/services.dart';
@@ -57,6 +58,11 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
         if (key == kTabLabelHomePage) {
           windowManager.setSize(getIncomingOnlyHomeSize());
           setResizable(false);
+        } else if (key == kTabCobertura) {
+          // Vantaris: el mapa de cobertura necesita sitio.
+          windowManager.setSize(const Size(1100, 760));
+          windowManager.center();
+          setResizable(true);
         } else {
           windowManager.setSize(getIncomingOnlySettingsSize());
           setResizable(true);

@@ -1,3 +1,4 @@
+import 'package:flutter_hbb/vantaris/cobertura/entrada.dart';
 import 'package:flutter_hbb/vantaris/tecnico.dart';
 import 'dart:async';
 import 'dart:io';
@@ -92,6 +93,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ),
       buildTip(context),
       const VantarisTecnicoCard(), // Vantaris: técnico conectado (cuenta de Pro)
+      const VantarisCoberturaCard(), // Vantaris: cobertura del local (solo Soporte)
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(

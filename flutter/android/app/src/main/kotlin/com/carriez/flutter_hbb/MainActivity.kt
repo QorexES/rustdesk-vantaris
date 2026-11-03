@@ -671,6 +671,10 @@ class MainActivity : FlutterActivity() {
                     // Diagnóstico y acciones rápidas del técnico; contesta en otro hilo.
                     VantarisDiag.handle(this, call.arguments as String, result)
                 }
+                "vantaris_cobertura" -> {
+                    // Mapa de cobertura del local (lib/vantaris/cobertura); contesta en otro hilo.
+                    VantarisCobertura.handle(this, call.arguments as String, result)
+                }
                 "vantaris_install_apk" -> {
                     result.success(VantarisUpdater.install(this, call.arguments as String))
                 }
