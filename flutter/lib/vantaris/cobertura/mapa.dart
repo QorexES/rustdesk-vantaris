@@ -74,11 +74,13 @@ Future<ui.Image?> mapaCalor(List<Medicion> mediciones, Capa capa, double anchoM,
       if (alfa <= 0.01) continue;
       final c = colorCalidad(num / den);
       final o = (fy * cols + fx) * 4;
-      // Premultiplicado no: decodeImageFromPixels con rgba8888 espera alfa directo.
-      px[o] = c.red;
-      px[o + 1] = c.green;
-      px[o + 2] = c.blue;
-      px[o + 3] = (alfa * 255).round();
+      // decodeImageFromPixels trata los píxeles como premultiplicados: sin multiplicar por el alfa,
+      // los bordes del calor salían aclarados (halo azulado sobre blanco).
+      final a = (alfa * 255).round();
+      px[o] = c.red * a ~/ 255;
+      px[o + 1] = c.green * a ~/ 255;
+      px[o + 2] = c.blue * a ~/ 255;
+      px[o + 3] = a;
     }
   }
   final hecho = Completer<ui.Image?>();

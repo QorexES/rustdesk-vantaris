@@ -296,7 +296,7 @@ Future<Uint8List> informePdf(Proyecto p, ui.Image? plano, List<RedWifi> redes) a
     }
     final canal = Analisis.mejorCanalTexto(redes, Analisis.redPropia(p));
     if (canal != null) y = pg.parrafo(canal, m, y + 4, pg.ancho - 2 * m, 10, color: _gris) + 6;
-    pg.texto('Generado con Vantaris Soporte. Umbrales WiFi: excelente ≥ -55 dBm, buena ≥ -67, regular ≥ -75.', m,
+    pg.texto('Generado con Vantaris Soporte. Umbrales WiFi: excelente desde -59 dBm, buena desde -67, regular desde -75.', m,
         pg.alto - 28, 8,
         color: _gris);
     pg.fin();

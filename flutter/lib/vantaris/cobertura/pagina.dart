@@ -90,7 +90,7 @@ class _CoberturaPaginaState extends State<CoberturaPagina> with WidgetsBindingOb
                   actions: [if (e.vivoActivo) const _PuntoVivo()],
                 )
               : null,
-          body: Column(children: [
+          body: SafeArea(top: false, child: Column(children: [
             if (!widget.conBarra || !estrecho)
               _Cabecera(
                 subtitulo: subtitulo,
@@ -109,7 +109,7 @@ class _CoberturaPaginaState extends State<CoberturaPagina> with WidgetsBindingOb
                       ),
               ),
             Expanded(child: cuerpo),
-          ]),
+          ])),
           bottomNavigationBar: estrecho
               ? NavigationBar(
                   selectedIndex: pestana,
