@@ -87,9 +87,21 @@ Future<(String?, String?)> vantarisClaveParaAlta(String usuario, String password
         autoLogin: false,
         type: HttpType.kAuthReqTypeAccount);
     final r = await http
-        .post(Uri.parse('$api/api/login'), body: jsonEncode(req.toJson()))
+        .post(Uri.parse('$api/api/login'),
+            // Sin esta cabecera el servidor Pro contesta 415 en texto plano y el alta fallaba
+            // siempre con «Sin conexión» (1.5.0).
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(req.toJson()))
         .timeout(const Duration(seconds: 10));
-    final body = jsonDecode(utf8.decode(r.bodyBytes)) as Map;
+    if (r.statusCode == 401 || r.statusCode == 403) {
+      return (null, 'Usuario o contraseña de técnico incorrectos.');
+    }
+    final Map body;
+    try {
+      body = jsonDecode(utf8.decode(r.bodyBytes)) as Map;
+    } catch (_) {
+      return (null, 'El servidor de soporte ha respondido algo inesperado (${r.statusCode}).');
+    }
     if (r.statusCode != 200 || body['error'] != null) {
       return (null, 'Usuario o contraseña de técnico incorrectos.');
     }
