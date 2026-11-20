@@ -1,6 +1,7 @@
-// Vantaris: verificación de firmas Ed25519 (RFC 8032) en Dart puro, solo para comprobar los
-// manifiestos de actualización. No hace falta que sea rápido (una firma por comprobación) ni que
-// sea de tiempo constante (solo se verifica con claves públicas). Sigue la implementación de
+// Vantaris: firmas Ed25519 (RFC 8032) en Dart puro: verificar los manifiestos de actualización y
+// FIRMAR la prueba del alta automática (vantaris/acceso.dart, con la clave del propio equipo). No hace
+// falta que sea rápido (una firma de vez en cuando) ni de tiempo constante: se firma una vez, en el
+// propio equipo y sin nadie que mida tiempos. Sigue la implementación de
 // referencia en Python de la RFC 8032 §6. Probado con los vectores de la RFC en
 // test/vantaris_update_test.dart.
 
@@ -95,4 +96,37 @@ bool ed25519Verify(List<int> publicKey, List<int> message, List<int> signature) 
           .bytes) %
       _q;
   return _equal(_mul(s, _g), _add(r, _mul(h, a)));
+}
+
+List<int> _le32(BigInt n) => List<int>.generate(32, (i) => ((n >> (8 * i)) & BigInt.from(255)).toInt());
+
+List<int> _compress(_P p) {
+  final zi = _inv(p.z);
+  final x = (p.x * zi) % _p, y = (p.y * zi) % _p;
+  return _le32(y | ((x & BigInt.one) << 255));
+}
+
+/// Escalar «a» y prefijo de la clave a partir de la semilla de 32 bytes (RFC 8032 §5.1.5).
+(BigInt, List<int>) _expandir(List<int> seed) {
+  final h = sha512.convert(seed).bytes;
+  var a = _le(h.sublist(0, 32));
+  a &= (BigInt.one << 254) - BigInt.from(8);
+  a |= BigInt.one << 254;
+  return (a, h.sublist(32));
+}
+
+/// Clave pública (32 bytes) de la semilla [seed] (los 32 primeros bytes de la clave secreta de libsodium).
+Uint8List ed25519PublicKey(List<int> seed) =>
+    Uint8List.fromList(_compress(_mul(_expandir(seed).$1, _g)));
+
+/// Firma Ed25519 (64 bytes) de [message] con la semilla [seed] de 32 bytes.
+Uint8List ed25519Sign(List<int> seed, List<int> message) {
+  if (seed.length != 32) throw ArgumentError('semilla de 32 bytes');
+  final (a, prefijo) = _expandir(seed);
+  final pub = _compress(_mul(a, _g));
+  final r = _le(sha512.convert([...prefijo, ...message]).bytes) % _q;
+  final rr = _compress(_mul(r, _g));
+  final k = _le(sha512.convert([...rr, ...pub, ...message]).bytes) % _q;
+  final s = (r + k * a) % _q;
+  return Uint8List.fromList([...rr, ..._le32(s)]);
 }

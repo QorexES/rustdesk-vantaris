@@ -46,6 +46,18 @@ void main() {
         expect(ed25519Verify(hex(v[0]), [...hex(v[1]), 0], hex(v[2])), isFalse);
       });
     }
+    // Firma (alta automática): semillas de la RFC → misma clave pública y misma firma.
+    const semillas = [
+      '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60',
+      '4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb',
+      'c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7',
+    ];
+    for (var i = 0; i < semillas.length; i++) {
+      test('firma como la RFC: vector ${i + 1}', () {
+        expect(ed25519PublicKey(hex(semillas[i])), hex(vectors[i][0]));
+        expect(ed25519Sign(hex(semillas[i]), hex(vectors[i][1])), hex(vectors[i][2]));
+      });
+    }
   });
 
   group('Manifiesto', () {

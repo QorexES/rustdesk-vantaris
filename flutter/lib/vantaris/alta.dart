@@ -15,17 +15,27 @@
 // Lo que NO puede hacer la app sola (lo hace scripts/provisionar-android.ps1 por cable): el permiso
 // de captura sin diálogo (appops PROJECT_MEDIA), la accesibilidad y la lista blanca de batería.
 //
-// Dos caminos: la tarjeta de esta pantalla, o el script por adb, que deja la contraseña pendiente
-// (VantarisAlta.kt) y aquí se aplica al abrir la app. Por adb también se puede dar de baja.
+// Tres caminos:
+//   - AUTOMÁTICO (1.5.2): al abrir la app sin alta, el equipo pide SU contraseña al servidor firmando
+//     con su clave privada de RustDesk (la de RustDesk.toml, la misma con la que se registra en hbbs).
+//     El servidor la comprueba con la clave pública que tiene hbbs para ese ID, así que solo la consigue
+//     el propio equipo. Ver vantarisAltaAutomatica y deploy/pro/turn-credenciales.
+//   - la tarjeta de esta pantalla, con la cuenta del técnico;
+//   - el script por adb, que deja la contraseña pendiente (VantarisAlta.kt) y aquí se aplica al abrir
+//     la app. Por adb también se puede dar de baja (y la baja apaga el alta automática).
 //
 // OJO con la config de Pro: si el override lleva «disable-change-permanent-password=Y», librustdesk
 // rechaza cualquier contraseña nueva (también la de aquí). Ver client-build/pro-generador.md.
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../common.dart';
 import '../consts.dart';
@@ -33,6 +43,7 @@ import '../models/platform_model.dart';
 import '../models/server_model.dart';
 import 'acceso.dart';
 import 'play.dart';
+import 'update/ed25519.dart';
 
 // Mismo canal que usa native_model.dart; gFFI.invokeMethod espera un bool y aquí vuelve JSON.
 const _mChannel = MethodChannel('mChannel');
@@ -85,6 +96,8 @@ Future<void> vantarisQuitarAlta() async {
   await bind.mainSetOption(key: kOptionApproveMode, value: '');
   await bind.mainSetOption(key: kOptionVerificationMethod, value: '');
   await bind.mainSetLocalOption(key: 'show-scam-warning', value: '');
+  // Dado de baja a propósito: que el alta automática no lo vuelva a dar de alta.
+  await bind.mainSetLocalOption(key: _kAltaAuto, value: 'N');
   await _canal(jsonEncode({'op': 'baja-hecha'}));
   await gFFI.serverModel.updatePasswordModel();
 }
@@ -104,7 +117,10 @@ Future<void> vantarisAltaPendiente() async {
       return;
     }
     final pwd = m['password'] as String? ?? '';
-    if (pwd.isEmpty) return;
+    if (pwd.isEmpty) {
+      unawaited(vantarisAltaAutomatica());
+      return;
+    }
     final err = await vantarisAplicarAlta(pwd);
     if (err != null) {
       showToast('Alta del equipo: $err', timeout: const Duration(seconds: 8));
@@ -114,6 +130,90 @@ Future<void> vantarisAltaPendiente() async {
     showToast('Equipo dado de alta para el soporte a distancia.');
   } catch (e) {
     debugPrint('vantaris alta pendiente: $e');
+  }
+}
+
+const _kAltaAuto = 'vantaris-alta-automatica';
+bool _altaAutoEnCurso = false;
+
+/// Semilla Ed25519 (32 bytes) y clave pública del equipo, leídas del RustDesk.toml de la app
+/// (`key_pair = [[64 bytes de libsodium: semilla + pública], [32 bytes de la pública]]`).
+Future<(List<int>, List<int>)?> _claveDelEquipo() async {
+  final dir = Directory((await getApplicationDocumentsDirectory()).path);
+  final patron = RegExp(r'key_pair\s*=\s*\[\s*\[([\d,\s]+)\]\s*,\s*\[([\d,\s]+)\]');
+  List<int> bytes(String s) =>
+      s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).map(int.parse).toList();
+  await for (final f in dir.list()) {
+    if (f is! File || !f.path.endsWith('.toml')) continue;
+    final m = patron.firstMatch(await f.readAsString());
+    if (m == null) continue;
+    final sk = bytes(m.group(1)!), pk = bytes(m.group(2)!);
+    if (sk.length != 64 || pk.length != 32) continue;
+    final semilla = sk.sublist(0, 32);
+    // Comprobación local: si la semilla no da esa pública, no se manda nada.
+    if (ed25519PublicKey(semilla).toString() != pk.toString()) continue;
+    return (semilla, pk);
+  }
+  return null;
+}
+
+/// Una petición de alta automática. Devuelve la contraseña, o null y si merece la pena reintentar.
+Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
+  final id = (await bind.mainGetMyId()).replaceAll(' ', '');
+  if (id.isEmpty) return (null, true);
+  final clave = await _claveDelEquipo();
+  if (clave == null) {
+    debugPrint('Vantaris alta automática: no encuentro la clave del equipo');
+    return (null, false);
+  }
+  final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final firma = ed25519Sign(clave.$1, utf8.encode('vantaris-alta:v1:$id:$ts'));
+  try {
+    final r = await http
+        .post(Uri.parse('$api/acceso/registro'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'id': id, 'ts': ts, 'firma': base64.encode(firma)}))
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode == 200) {
+      final p = (jsonDecode(r.body) as Map)['password'];
+      return (p is String && p.isNotEmpty ? p : null, false);
+    }
+    debugPrint('Vantaris alta automática: el servidor contesta ${r.statusCode}');
+    // 404: hbbs aún no conoce este ID (recién instalado); 429/5xx: más tarde. 403/400: no insistir.
+    return (null, r.statusCode == 404 || r.statusCode == 429 || r.statusCode >= 500);
+  } catch (e) {
+    debugPrint('Vantaris alta automática: $e');
+    return (null, true);
+  }
+}
+
+/// Alta automática: si el equipo no está dado de alta, pide su contraseña al servidor sin técnico.
+/// Reintenta un rato (el ID tarda en aparecer en hbbs tras instalar, o no hay red al arrancar).
+Future<void> vantarisAltaAutomatica() async {
+  if (!vantarisAltaAplica || _altaAutoEnCurso) return;
+  if (bind.mainGetLocalOption(key: _kAltaAuto) == 'N') return; // baja a propósito
+  _altaAutoEnCurso = true;
+  try {
+    final api = await bind.mainGetApiServer();
+    if (api.isEmpty) return;
+    for (var intento = 0; intento < 40; intento++) {
+      if (await vantarisAltaHecha()) return;
+      final (pwd, reintentar) = await _pedirAltaAutomatica(api);
+      if (pwd != null) {
+        final err = await vantarisAplicarAlta(pwd);
+        if (err != null) {
+          showToast('Alta automática: $err', timeout: const Duration(seconds: 8));
+        } else {
+          showToast('Equipo dado de alta para el soporte a distancia de Vantaris.');
+        }
+        return;
+      }
+      if (!reintentar) return;
+      // 30 s los primeros minutos, luego cada 2 min (unos 70 min en total).
+      await Future.delayed(Duration(seconds: intento < 10 ? 30 : 120));
+    }
+  } finally {
+    _altaAutoEnCurso = false;
   }
 }
 
