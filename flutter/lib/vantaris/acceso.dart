@@ -109,6 +109,19 @@ Future<bool> vantarisEntrarSinClave(SessionID sessionId, String peerId) async {
   return true;
 }
 
+/// Llamado cuando el equipo rechaza la contraseña. true = quedan contraseñas por probar y se ha
+/// vuelto a conectar (al pedirla otra vez, vantarisEntrarSinClave usa la siguiente); false = enseñar
+/// «Contraseña incorrecta».
+Future<bool> vantarisSiguienteClave(SessionID sessionId) async {
+  final e = _pendientes[sessionId.toString()];
+  if (e == null || e.$1.isEmpty || DateTime.now().difference(e.$2) > const Duration(seconds: 30)) {
+    return false;
+  }
+  _pendientes[sessionId.toString()] = (e.$1, DateTime.now());
+  await bind.sessionReconnect(sessionId: sessionId, forceRelay: false);
+  return true;
+}
+
 /// Alta desde el propio equipo: inicia sesión con el usuario del instalador, pide la contraseña
 /// de este equipo y cierra la sesión. Devuelve (contraseña, null) o (null, motivo del fallo).
 Future<(String?, String?)> vantarisClaveParaAlta(String usuario, String password) async {

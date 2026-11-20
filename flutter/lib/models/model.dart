@@ -913,7 +913,11 @@ class FfiModel with ChangeNotifier {
     }
 
     if (type == 're-input-password') {
-      wrongPasswordDialog(sessionId, dialogManager, type, title, text);
+      // Vantaris: si el equipo ha rechazado la del servidor, se prueba sola la siguiente
+      // (genéricas de instalaciones viejas) antes de enseñar «Contraseña incorrecta».
+      vantarisSiguienteClave(sessionId).then((hecho) {
+        if (!hecho) wrongPasswordDialog(sessionId, dialogManager, type, title, text);
+      });
     } else if (type == 'input-2fa') {
       enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
