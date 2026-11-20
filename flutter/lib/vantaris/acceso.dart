@@ -6,8 +6,9 @@
 // creamos nosotros). Cada petición queda registrada con el técnico y el ID.
 //
 //   Técnico:  al pedir el equipo la contraseña («input-password»), se pide aquí y se entra sola.
-//             Si falla (sin sesión, sin red, equipo dado de alta a mano con otra) sale el diálogo
-//             de siempre. Vale para todas las entradas: ID, libreta, Falcon (rustdesk://), --connect.
+//             Si el equipo la rechaza, se prueban las genéricas de las instalaciones viejas que da el
+//             mismo servidor («anteriores»; nunca van en el binario). Si tampoco (sin sesión, sin
+//             red, equipo dado de alta a mano con otra) sale el diálogo de siempre. Vale para todas las entradas: ID, libreta, Falcon (rustdesk://), --connect.
 //   Alta:     la tarjeta «Dar de alta» del equipo pide el usuario del instalador, inicia sesión un
 //             momento, pide la contraseña de ESTE equipo, la aplica y cierra la sesión.
 
@@ -20,10 +21,38 @@ import '../common.dart';
 import '../common/hbbs/hbbs.dart';
 import '../models/platform_model.dart';
 
-/// Cuándo se probó la contraseña del servidor en cada sesión: si el equipo la rechaza (vuelve a
-/// pedirla enseguida) sale el diálogo normal y no se entra en bucle. Pasado un rato (reconexión tras
-/// reiniciar el equipo) se vuelve a probar.
-final Map<String, DateTime> _probadas = {};
+/// Contraseñas que quedan por probar en cada sesión y cuándo se probó la última: cada vez que el
+/// equipo vuelve a pedirla enseguida (la ha rechazado) se prueba la siguiente; sin más, sale el
+/// diálogo normal y no se entra en bucle. Pasado un rato (reconexión tras reiniciar el equipo) se
+/// vuelve a empezar.
+final Map<String, (List<String>, DateTime)> _pendientes = {};
+
+/// Contraseña del equipo y, detrás, las genéricas antiguas, sin repetir.
+Future<List<String>> _pedirClaves(String api, String token, String id) async {
+  try {
+    final r = await http
+        .post(Uri.parse('$api/acceso/clave'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'id': id.replaceAll(' ', '')}))
+        .timeout(const Duration(seconds: 6));
+    if (r.statusCode != 200) {
+      debugPrint('Vantaris acceso: el servidor no da la clave (${r.statusCode})');
+      return [];
+    }
+    final m = jsonDecode(r.body) as Map;
+    final todas = <String>[
+      if (m['password'] is String) m['password'] as String,
+      if (m['anteriores'] is List) ...(m['anteriores'] as List).whereType<String>(),
+    ];
+    return todas.where((c) => c.isNotEmpty).toSet().toList();
+  } catch (e) {
+    debugPrint('Vantaris acceso: $e');
+    return [];
+  }
+}
 
 Future<String?> _pedirClave(String api, String token, String id) async {
   try {
@@ -59,13 +88,22 @@ Future<String?> vantarisClaveEquipo(String id) async {
 /// (no hay que enseñar el diálogo); false = enseñar el diálogo normal.
 Future<bool> vantarisEntrarSinClave(SessionID sessionId, String peerId) async {
   final clave = sessionId.toString();
-  final antes = _probadas[clave];
-  if (antes != null && DateTime.now().difference(antes) < const Duration(seconds: 30)) {
+  final antes = _pendientes[clave];
+  List<String> cola;
+  if (antes != null && DateTime.now().difference(antes.$2) < const Duration(seconds: 30)) {
+    cola = antes.$1; // la anterior no valió: la siguiente
+  } else {
+    final api = await bind.mainGetApiServer();
+    final token = bind.mainGetLocalOption(key: 'access_token');
+    if (api.isEmpty || token.isEmpty) return false;
+    cola = await _pedirClaves(api, token, peerId);
+  }
+  if (cola.isEmpty) {
+    _pendientes.remove(clave);
     return false;
   }
-  final pwd = await vantarisClaveEquipo(peerId);
-  if (pwd == null) return false;
-  _probadas[clave] = DateTime.now();
+  final pwd = cola.first;
+  _pendientes[clave] = (cola.sublist(1), DateTime.now());
   await bind.sessionLogin(
       sessionId: sessionId, osUsername: '', osPassword: '', password: pwd, remember: false);
   return true;

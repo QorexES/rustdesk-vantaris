@@ -193,8 +193,11 @@ Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
   }
 }
 
-/// Alta automática: si el equipo no está dado de alta, pide su contraseña al servidor sin técnico.
-/// Reintenta un rato (el ID tarda en aparecer en hbbs tras instalar, o no hay red al arrancar).
+/// Alta automática, una vez por ID: pide la contraseña del equipo al servidor sin técnico y la deja
+/// puesta. También en equipos YA dados de alta: los instalados con versiones viejas tienen una
+/// contraseña genérica o a mano que el servidor no conoce, y así pasan solos a la suya (regularizar
+/// la flota). Solo se respeta una baja hecha a propósito («N»). Reintenta un rato (el ID tarda en
+/// aparecer en hbbs tras instalar, o no hay red al arrancar).
 Future<void> vantarisAltaAutomatica() async {
   if (!vantarisAltaAplica || _altaAutoEnCurso) return;
   if (bind.mainGetLocalOption(key: _kAltaAuto) == 'N') return; // baja a propósito
@@ -203,14 +206,17 @@ Future<void> vantarisAltaAutomatica() async {
     final api = await bind.mainGetApiServer();
     if (api.isEmpty) return;
     for (var intento = 0; intento < 40; intento++) {
-      if (await vantarisAltaHecha()) return;
+      final id = (await bind.mainGetMyId()).replaceAll(' ', '');
+      if (id.isNotEmpty && bind.mainGetLocalOption(key: _kAltaAuto) == 'v1:$id') return; // ya hecha
+      final teniaAlta = await vantarisAltaHecha();
       final (pwd, reintentar) = await _pedirAltaAutomatica(api);
       if (pwd != null) {
         final err = await vantarisAplicarAlta(pwd);
         if (err != null) {
           showToast('Alta automática: $err', timeout: const Duration(seconds: 8));
         } else {
-          showToast('Equipo dado de alta para el soporte a distancia de Vantaris.');
+          await bind.mainSetLocalOption(key: _kAltaAuto, value: 'v1:$id');
+          if (!teniaAlta) showToast('Equipo dado de alta para el soporte a distancia de Vantaris.');
         }
         return;
       }
