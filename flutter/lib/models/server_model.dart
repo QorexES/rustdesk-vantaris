@@ -665,7 +665,8 @@ class ServerModel with ChangeNotifier {
         ),
         actions: [
           dialogButton("Dismiss", onPressed: cancel, isOutline: true),
-          if (approveMode != 'password')
+          // Vantaris: «Aceptar» siempre; quien está delante del equipo puede dejar entrar
+          // aunque el modo sea «solo contraseña» (antes solo salía «Cancelar»).
             dialogButton("Accept", onPressed: submit),
         ],
         onSubmit: submit,

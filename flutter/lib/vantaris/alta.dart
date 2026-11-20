@@ -229,6 +229,24 @@ Future<void> vantarisAltaAutomatica() async {
   }
 }
 
+/// Un intento de alta automática ahora mismo (botón «Dar de alta»): null si ha ido bien o el motivo.
+Future<String?> vantarisAltaAutomaticaYa() async {
+  final api = await bind.mainGetApiServer();
+  if (api.isEmpty) return 'Este programa no tiene servidor configurado.';
+  final (pwd, reintentar) = await _pedirAltaAutomatica(api);
+  if (pwd == null) {
+    return reintentar
+        ? 'El servidor aún no conoce este equipo: inicia el servicio y vuelve a probar en un minuto.'
+        : 'El servidor no ha aceptado el alta automática.';
+  }
+  final err = await vantarisAplicarAlta(pwd);
+  if (err == null) {
+    final id = (await bind.mainGetMyId()).replaceAll(' ', '');
+    await bind.mainSetLocalOption(key: _kAltaAuto, value: 'v1:$id');
+  }
+  return err;
+}
+
 /// Tarjeta de arriba en «Compartir pantalla».
 class VantarisAltaCard extends StatefulWidget {
   const VantarisAltaCard({Key? key}) : super(key: key);
@@ -297,7 +315,17 @@ class _VantarisAltaCardState extends State<VantarisAltaCard> {
             if (!hecha)
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: _kAmbar),
-                onPressed: () => _abrirAlta(cambiar: false),
+                // Sin usuario ni contraseña: primero el alta automática; si no se puede, el
+                // formulario del técnico.
+                onPressed: () async {
+                  final err = await vantarisAltaAutomaticaYa();
+                  if (err == null) {
+                    showToast('Equipo dado de alta para el soporte a distancia de Vantaris.');
+                  } else {
+                    showToast(err, timeout: const Duration(seconds: 6));
+                    if (mounted) await _abrirAlta(cambiar: false);
+                  }
+                },
                 child: const Text('Dar de alta'),
               ),
           ]),

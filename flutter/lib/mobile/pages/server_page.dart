@@ -779,7 +779,8 @@ class ConnectionManager extends StatelessWidget {
           onPressed: () {
             serverModel.sendLoginResponse(client, false);
           }).marginOnly(right: 15),
-      if (serverModel.approveMode != 'password')
+      // Vantaris: «Aceptar» siempre; quien está delante del equipo puede dejar entrar
+      // aunque el modo sea «solo contraseña» (antes solo salía «Cancelar»).
         ElevatedButton.icon(
             icon: const Icon(Icons.check),
             label: Text(translate("Accept")),
@@ -802,7 +803,8 @@ class ConnectionManager extends StatelessWidget {
             onPressed: () {
               serverModel.handleVoiceCall(client, false);
             }).marginOnly(right: 15),
-        if (serverModel.approveMode != 'password')
+        // Vantaris: «Aceptar» siempre; quien está delante del equipo puede dejar entrar
+        // aunque el modo sea «solo contraseña» (antes solo salía «Cancelar»).
           ElevatedButton.icon(
               icon: const Icon(Icons.check),
               label: Text(translate("Accept")),
