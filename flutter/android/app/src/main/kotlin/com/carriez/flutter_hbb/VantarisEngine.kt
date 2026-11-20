@@ -90,6 +90,17 @@ object VantarisEngine {
                         // Actualización sin pantalla (equipo desatendido): ver VantarisUpdater.
                         result.success(VantarisUpdater.install(app, call.arguments as String))
                     }
+                    SYNC_APP_DIR_CONFIG_PATH -> {
+                        if (call.arguments is String) {
+                            app.getSharedPreferences(KEY_SHARED_PREFERENCES, Context.MODE_PRIVATE).edit()
+                                .putString(KEY_APP_DIR_CONFIG_PATH, call.arguments as String).apply()
+                        }
+                        result.success(call.arguments is String)
+                    }
+                    "vantaris_alta" -> {
+                        // Alta automática sin pantalla (tras actualizar o arrancar): alta.dart.
+                        result.success(VantarisAlta.handle(app, call.arguments as String))
+                    }
                     "vantaris_front" -> {
                         bringToFront(app)
                         result.success(null)

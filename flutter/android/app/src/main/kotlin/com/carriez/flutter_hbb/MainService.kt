@@ -253,7 +253,12 @@ class MainService : Service() {
 
         // keep the config dir same with flutter
         val prefs = applicationContext.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
-        val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
+        // Vantaris: si la app nunca se ha abierto (Landi la instala y la arranca el launcher o una
+        // actualización), Flutter aún no ha dicho su carpeta: se usa la misma que usará él
+        // (app_flutter). Sin esto RustDesk generaba la clave sin carpeta, no la guardaba y el alta
+        // automática no podía firmar.
+        val configPath = (prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: "")
+            .ifEmpty { io.flutter.util.PathUtils.getDataDirectory(applicationContext) }
         val homePath = applicationContext.getExternalFilesDir(null)?.absolutePath
             ?: applicationContext.filesDir.absolutePath
         FFI.startServer(configPath, homePath, BuildConfig.VANTARIS_CUSTOM_CLIENT)
@@ -360,8 +365,15 @@ class MainService : Service() {
             intent.getParcelableExtra<Intent>(EXT_MEDIA_PROJECTION_RES_INTENT)?.let {
                 replaceMediaProjection(mediaProjectionManager, it)
             } ?: let {
-                Log.d(logTag, "getParcelableExtra intent null, invoke requestMediaProjection")
-                requestMediaProjection()
+                if (intent.getBooleanExtra(EXT_INIT_FROM_BOOT, false) && !vantarisCapturaConcedida()) {
+                    // Vantaris: arrancado solo (encendido, actualización, launcher) y sin el permiso de
+                    // captura concedido por cable: NO se pide ahora, que el cliente vería «empezar a
+                    // grabar» sin venir a cuento. Se pide cuando entre un técnico (startCapture).
+                    Log.d(logTag, "arranque sin permiso de captura: se pedirá al conectar un técnico")
+                } else {
+                    Log.d(logTag, "getParcelableExtra intent null, invoke requestMediaProjection")
+                    requestMediaProjection()
+                }
             }
         }
         return START_NOT_STICKY // don't use sticky (auto restart), the new service (from auto restart) will lose control
@@ -370,6 +382,20 @@ class MainService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         updateScreenInfo(newConfig.orientation)
+    }
+
+    /** ¿Tiene la app la captura concedida de antemano (appops PROJECT_MEDIA=allow, por cable)? */
+    private fun vantarisCapturaConcedida(): Boolean = try {
+        val aom = getSystemService(APP_OPS_SERVICE) as android.app.AppOpsManager
+        val modo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            aom.unsafeCheckOpNoThrow("android:project_media", android.os.Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            aom.checkOpNoThrow("android:project_media", android.os.Process.myUid(), packageName)
+        }
+        modo == android.app.AppOpsManager.MODE_ALLOWED
+    } catch (e: Exception) {
+        true // no se puede saber: como siempre
     }
 
     private fun requestMediaProjection(recovery: Boolean = false) {
@@ -381,6 +407,28 @@ class MainService : Service() {
             }
         }
         startActivity(intent)
+        // Vantaris: sin el permiso de captura concedido de antemano y con la app en segundo plano,
+        // Android NO deja abrir el aviso de «empezar a grabar» (Background activity start): el
+        // técnico se quedaría en «esperando imagen» sin que nadie se entere. Se avisa con una
+        // notificación; al tocarla sale el aviso de Android.
+        if (!vantarisCapturaConcedida()) {
+            try {
+                val pi = android.app.PendingIntent.getActivity(
+                    this, 7301, intent,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+                val n = notificationBuilder
+                    .setOngoing(false)
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setContentTitle("El técnico de Vantaris quiere ver la pantalla")
+                    .setContentText("Toca aquí y pulsa «Empezar ahora» para que pueda ayudarte.")
+                    .setContentIntent(pi)
+                    .build()
+                notificationManager.notify(7301, n)
+            } catch (e: Exception) {
+                Log.w(logTag, "aviso de captura: $e")
+            }
+        }
     }
 
     @Synchronized

@@ -47,6 +47,20 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
 
+        <!-- Vantaris: pantalla invisible que abre Vantaris Inicio al arrancar: pone en marcha el
+             servicio (desde segundo plano Android 12+ no deja) y se cierra. VantarisArranque.kt -->
+        <activity
+            android:name=".VantarisArranque"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="es.vantaris.soporte.ARRANCAR" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
@@ -58,6 +72,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <!--ACTION_BOOT_COMPLETED for debug test on no root device-->
                 <action android:name="com.carriez.flutter_hbb.DEBUG_BOOT_COMPLETED" />
+                <!-- Vantaris: lo manda Vantaris Inicio al arrancar (app recién instalada sin abrir) -->
+                <action android:name="es.vantaris.soporte.ARRANCAR" />
             </intent-filter>
         </receiver>
 

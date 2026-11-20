@@ -169,8 +169,9 @@ Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
   if (id.isEmpty) return (null, true);
   final clave = await _claveDelEquipo();
   if (clave == null) {
-    debugPrint('Vantaris alta automática: no encuentro la clave del equipo');
-    return (null, false);
+    // Recién instalado: RustDesk genera la clave y la guarda un instante después.
+    debugPrint('Vantaris alta automática: aún no encuentro la clave del equipo');
+    return (null, true);
   }
   final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   final firma = ed25519Sign(clave.$1, utf8.encode('vantaris-alta:v1:$id:$ts'));
@@ -185,8 +186,10 @@ Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
       return (p is String && p.isNotEmpty ? p : null, false);
     }
     debugPrint('Vantaris alta automática: el servidor contesta ${r.statusCode}');
-    // 404: hbbs aún no conoce este ID (recién instalado); 429/5xx: más tarde. 403/400: no insistir.
-    return (null, r.statusCode == 404 || r.statusCode == 429 || r.statusCode >= 500);
+    // 404: hbbs aún no conoce este ID (recién instalado). 403: también se reintenta: la primera vez
+    // que arranca, RustDesk genera la clave y el ID y los guarda un instante después, y la clave
+    // leída del fichero puede no ser aún la que tiene el servidor. 429/5xx: más tarde. 400: no.
+    return (null, r.statusCode == 404 || r.statusCode == 403 || r.statusCode == 429 || r.statusCode >= 500);
   } catch (e) {
     debugPrint('Vantaris alta automática: $e');
     return (null, true);

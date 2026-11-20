@@ -30,6 +30,7 @@ import 'mobile/pages/server_page.dart';
 import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
 import 'package:flutter_hbb/vantaris/play.dart';
+import 'package:flutter_hbb/vantaris/alta.dart' show vantarisAltaAutomatica;
 
 /// Basic window and launch properties.
 int? kWindowId;
@@ -179,6 +180,8 @@ void runMobileApp() async {
   checkUpdate();
   if (isAndroid) androidChannelInit();
   if (isAndroid) platformFFI.syncAndroidServiceAppDirConfigPath();
+  // Vantaris: alta automática también sin pantalla (tras actualizar o arrancar, BootReceiver).
+  if (isAndroid) vantarisAltaAutomatica();
   draggablePositions.load();
   await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
   gFFI.userModel.refreshCurrentUser();

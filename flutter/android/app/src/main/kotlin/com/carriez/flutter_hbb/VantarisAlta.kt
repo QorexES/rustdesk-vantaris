@@ -34,6 +34,7 @@ object VantarisAlta {
     private const val KEY_HECHA = "VANTARIS_ALTA_HECHA"
     private const val KEY_BAJA = "VANTARIS_BAJA_PENDIENTE"
     private const val KEY_ID = "VANTARIS_ID"
+    private const val KEY_BAJA_HECHA = "VANTARIS_BAJA_HECHA" // baja a propósito: no arrancar solo
     private val VALIDA = Regex("^[\\x21-\\x7E]{8,64}$") // ASCII visible, sin espacios
 
     private fun prefs(ctx: Context) =
@@ -51,7 +52,7 @@ object VantarisAlta {
                 .put("baja", p.getBoolean(KEY_BAJA, false)).toString()
             // Dart ya la ha aplicado: se borra y se recuerda que el equipo está dado de alta.
             "hecha" -> {
-                p.edit().remove(KEY_PENDIENTE).putBoolean(KEY_HECHA, true)
+                p.edit().remove(KEY_PENDIENTE).putBoolean(KEY_HECHA, true).remove(KEY_BAJA_HECHA)
                     .putBoolean(KEY_START_ON_BOOT_OPT, a.optBoolean("arranque", true)).apply()
                 Log.i(TAG, "alta aplicada")
                 "{}"
@@ -63,6 +64,7 @@ object VantarisAlta {
             }
             "baja-hecha" -> {
                 p.edit().remove(KEY_PENDIENTE).remove(KEY_BAJA).putBoolean(KEY_HECHA, false)
+                    .putBoolean(KEY_BAJA_HECHA, true)
                     .putBoolean(KEY_START_ON_BOOT_OPT, false).apply()
                 Log.i(TAG, "baja aplicada")
                 "{}"
@@ -70,6 +72,9 @@ object VantarisAlta {
             else -> "{}"
         }
     }
+
+    /** Dado de baja a propósito (equipo retirado): ni se arranca solo ni se da de alta solo. */
+    fun dadoDeBaja(ctx: Context) = prefs(ctx).getBoolean(KEY_BAJA_HECHA, false)
 
     fun estado(ctx: Context): String {
         val p = prefs(ctx)
