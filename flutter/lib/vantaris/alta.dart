@@ -72,6 +72,10 @@ String vantarisGenerarPassword() {
   return List.generate(12, (_) => letras[r.nextInt(letras.length)]).join();
 }
 
+/// Sube cada vez que cambia el alta (aplicada o quitada): la tarjeta la escucha para refrescarse
+/// enseguida, también cuando el alta llega sola (automática o por cable) con la pantalla abierta.
+final vantarisAltaCambio = ValueNotifier<int>(0);
+
 bool _valida(String p) => RegExp(r'^[\x21-\x7E]{8,64}$').hasMatch(p);
 
 /// Aplica el alta. Devuelve null si ha ido bien o el motivo del fallo.
@@ -87,6 +91,7 @@ Future<String?> vantarisAplicarAlta(String pwd, {bool arranque = true}) async {
   await bind.mainSetLocalOption(key: 'show-scam-warning', value: 'N');
   await _canal(jsonEncode({'op': 'hecha', 'arranque': arranque}));
   await gFFI.serverModel.updatePasswordModel();
+  vantarisAltaCambio.value++;
   return null;
 }
 
@@ -100,6 +105,7 @@ Future<void> vantarisQuitarAlta() async {
   await bind.mainSetLocalOption(key: _kAltaAuto, value: 'N');
   await _canal(jsonEncode({'op': 'baja-hecha'}));
   await gFFI.serverModel.updatePasswordModel();
+  vantarisAltaCambio.value++;
 }
 
 /// Si el script por cable ha dejado una contraseña, se aplica ahora (y se borra).
@@ -234,11 +240,13 @@ class _VantarisAltaCardState extends State<VantarisAltaCard> {
     _refresh();
     // La tarjeta no escucha los cambios de config: se refresca con el modelo.
     gFFI.serverModel.addListener(_refresh);
+    vantarisAltaCambio.addListener(_refresh);
   }
 
   @override
   void dispose() {
     gFFI.serverModel.removeListener(_refresh);
+    vantarisAltaCambio.removeListener(_refresh);
     super.dispose();
   }
 
