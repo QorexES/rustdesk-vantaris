@@ -181,6 +181,12 @@ class FloatingWindowService : Service(), View.OnTouchListener {
         val wh = getScreenSize(windowManager)
         val w = wh.first
         val h = wh.second
+        // Vantaris: por defecto la bolita es invisible (transparencia 0, deja pasar los toques) y del tamaño
+        // mínimo. Sigue existiendo como ventana superpuesta, que es lo que evita que Android cierre el
+        // servicio en segundo plano; las opciones floating-window-* de abajo, si están puestas, mandan.
+        viewWidth = MIN_VIEW_SIZE
+        viewHeight = MIN_VIEW_SIZE
+        viewTransparency = 0f
         // size
         FFI.getLocalOption("floating-window-size").let {
             if (it.isNotEmpty()) {
