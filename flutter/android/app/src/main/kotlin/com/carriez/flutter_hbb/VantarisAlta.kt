@@ -15,6 +15,7 @@ package com.carriez.flutter_hbb
 //      --method estado  ->  "hecha" | "pendiente" | "baja-pendiente" | "sin-alta"
 //      --method baja    ->  al abrir la app se quita el alta (vuelve a pedir «Aceptar»; equipo retirado)
 //      --method id      ->  ID de RustDesk del equipo (lo guarda Dart al abrir la app; "" si aún no).
+//                          Este, y solo este, lo puede pedir cualquier app (el TPV lo muestra).
 //                           El script lo usa para pedir al servidor la contraseña de ESTE equipo.
 
 import android.content.ContentProvider
@@ -104,12 +105,18 @@ class VantarisAltaProvider : ContentProvider() {
     override fun onCreate() = true
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
+        val ctx = context ?: throw IllegalStateException("sin contexto")
+        val out = Bundle()
+        // «id» lo puede pedir cualquier app (el TPV lo enseña como código de soporte): el ID no es
+        // secreto, sale en la pantalla de la propia app. Todo lo demás, solo adb.
+        if (method == "id") {
+            out.putString("resultado", VantarisAlta.id(ctx))
+            return out
+        }
         val uid = Binder.getCallingUid()
         if (uid != 2000 && uid != 0) { // shell (adb) o root
             throw SecurityException("Solo por adb")
         }
-        val ctx = context ?: throw IllegalStateException("sin contexto")
-        val out = Bundle()
         when (method) {
             "alta" -> {
                 val pwd = arg ?: ""

@@ -210,6 +210,12 @@ Future<void> vantarisAltaAutomatica() async {
     if (api.isEmpty) return;
     for (var intento = 0; intento < 40; intento++) {
       final id = (await bind.mainGetMyId()).replaceAll(' ', '');
+      // El ID para otras apps (el TPV lo enseña como código de soporte), aunque nunca se abra la app.
+      if (id.isNotEmpty) {
+        try {
+          await _canal(jsonEncode({'op': 'id', 'id': id}));
+        } catch (_) {}
+      }
       if (id.isNotEmpty && bind.mainGetLocalOption(key: _kAltaAuto) == 'v1:$id') return; // ya hecha
       final teniaAlta = await vantarisAltaHecha();
       final (pwd, reintentar) = await _pedirAltaAutomatica(api);
