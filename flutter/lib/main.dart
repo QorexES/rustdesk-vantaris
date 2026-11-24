@@ -141,6 +141,9 @@ void runMainApp(bool startService) async {
   if (startService) {
     gFFI.serverModel.startService();
   }
+  // Vantaris: en Windows, alta automática del equipo (contraseña propia que da el servidor) al
+  // abrir la ventana principal; también regulariza equipos con una contraseña vieja o puesta a mano.
+  if (isWindows) unawaited(vantarisAltaAutomatica());
   await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
   gFFI.userModel.refreshCurrentUser();
   runApp(App());
