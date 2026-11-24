@@ -48,14 +48,17 @@ import 'update/ed25519.dart';
 // Mismo canal que usa native_model.dart; gFFI.invokeMethod espera un bool y aquí vuelve JSON.
 const _mChannel = MethodChannel('mChannel');
 
-Future<String> _canal(String args) async =>
-    await _mChannel.invokeMethod<String>('vantaris_alta', args) ?? '{}';
+// En Windows no hay canal nativo (lo de Android: provisionar por cable, BootReceiver…).
+Future<String> _canal(String args) async => isAndroid
+    ? await _mChannel.invokeMethod<String>('vantaris_alta', args) ?? '{}'
+    : '{}';
 
 const _kTeal = Color(0xFF03B5A5);
 const _kAmbar = Color(0xFFE08A00);
 
-/// ¿Hay que mostrar el alta? Solo en el Android que se deja controlar.
-bool get vantarisAltaAplica => isAndroid && !bind.isOutgoingOnly();
+/// ¿Hay que dar de alta el equipo? En el Android y el Windows que se dejan controlar (Vantaris
+/// Soporte; el Técnico es solo saliente).
+bool get vantarisAltaAplica => (isAndroid || isWindows) && !bind.isOutgoingOnly();
 
 /// ¿Está el equipo listo para entrar sin «Aceptar»?
 Future<bool> vantarisAltaHecha() async {
@@ -167,6 +170,7 @@ Future<(List<int>, List<int>)?> _claveDelEquipo() async {
 Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
   final id = (await bind.mainGetMyId()).replaceAll(' ', '');
   if (id.isEmpty) return (null, true);
+  if (isWindows) return _pedirAltaPorUuid(api, id);
   final clave = await _claveDelEquipo();
   if (clave == null) {
     // Recién instalado: RustDesk genera la clave y la guarda un instante después.
@@ -192,6 +196,31 @@ Future<(String?, bool)> _pedirAltaAutomatica(String api) async {
     return (null, r.statusCode == 404 || r.statusCode == 403 || r.statusCode == 429 || r.statusCode >= 500);
   } catch (e) {
     debugPrint('Vantaris alta automática: $e');
+    return (null, true);
+  }
+}
+
+/// Windows: la clave del equipo la guarda el servicio en el perfil de LocalService (este proceso,
+/// del usuario, no la puede leer), así que la prueba es el UUID de máquina (MachineGuid), el mismo
+/// que el servicio manda a hbbs al registrarse y que el servidor compara con el suyo. En Android no
+/// vale (allí el UUID es la clave pública) y se firma con la clave del equipo.
+Future<(String?, bool)> _pedirAltaPorUuid(String api, String id) async {
+  final uuid = await bind.mainGetUuid();
+  if (uuid.isEmpty) return (null, true);
+  try {
+    final r = await http
+        .post(Uri.parse('$api/acceso/registro'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'id': id, 'uuid': uuid}))
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode == 200) {
+      final p = (jsonDecode(r.body) as Map)['password'];
+      return (p is String && p.isNotEmpty ? p : null, false);
+    }
+    debugPrint('Vantaris alta automática (uuid): el servidor contesta ${r.statusCode}');
+    return (null, r.statusCode == 404 || r.statusCode == 403 || r.statusCode == 429 || r.statusCode >= 500);
+  } catch (e) {
+    debugPrint('Vantaris alta automática (uuid): $e');
     return (null, true);
   }
 }
