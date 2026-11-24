@@ -438,9 +438,13 @@ class InputService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= 33 && conexionTeclado == null) {
             val textoAccesible = textToCommit
             val pulsada = keyEvent.getDown() || keyEvent.getPress()
-            val codigo = if (textoAccesible == null && pulsada) KeyEventConverter.toAndroidKeyEvent(keyEvent).keyCode else null
-            if (textoAccesible != null || codigo != null) {
-                Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(textoAccesible, codigo) }
+            val tecla = if (textoAccesible == null && pulsada) KeyEventConverter.toAndroidKeyEvent(keyEvent) else null
+            // Ctrl+V: pega lo ultimo que se copio en el PC del tecnico.
+            val pegar = tecla != null && tecla.keyCode == KeyEventAndroid.KEYCODE_V && tecla.isCtrlPressed()
+            val texto = if (pegar) RdClipboardManager.vantarisUltimoTexto else textoAccesible
+            val codigo = if (pegar) null else tecla?.keyCode
+            if (texto != null || codigo != null) {
+                Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(texto, codigo) }
             }
             return
         }
