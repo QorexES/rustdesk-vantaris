@@ -438,13 +438,32 @@ class InputService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= 33 && conexionTeclado == null) {
             val textoAccesible = textToCommit
             val pulsada = keyEvent.getDown() || keyEvent.getPress()
-            val tecla = if (textoAccesible == null && pulsada) KeyEventConverter.toAndroidKeyEvent(keyEvent) else null
-            // Ctrl+V: pega lo ultimo que se copio en el PC del tecnico.
-            val pegar = tecla != null && tecla.keyCode == KeyEventAndroid.KEYCODE_V && tecla.isCtrlPressed()
-            val texto = if (pegar) RdClipboardManager.vantarisUltimoTexto else textoAccesible
-            val codigo = if (pegar) null else tecla?.keyCode
-            if (texto != null || codigo != null) {
-                Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(texto, codigo) }
+            // Ctrl llega como tecla propia (abajo/arriba) y la V puede venir sin el modificador, o
+            // como texto «v»: se lleva el estado aqui.
+            if (keyEvent.hasControlKey() && (keyEvent.getControlKey() == hbb.MessageOuterClass.ControlKey.Control ||
+                    keyEvent.getControlKey() == hbb.MessageOuterClass.ControlKey.RControl)) {
+                vantarisCtrl = keyEvent.getDown() && !keyEvent.getPress()
+                return
+            }
+            val ctrl = vantarisCtrl || keyEvent.getModifiersList().any {
+                it == hbb.MessageOuterClass.ControlKey.Control || it == hbb.MessageOuterClass.ControlKey.RControl
+            }
+            val tecla = if (pulsada) KeyEventConverter.toAndroidKeyEvent(keyEvent) else null
+            if (ctrl) {
+                // Ctrl+V: pega lo ultimo que se copio en el PC del tecnico. Con Ctrl pulsado no se
+                // escriben letras (Ctrl+C, Ctrl+A... no deben meter una «c» en el campo).
+                val esV = textoAccesible.equals("v", true) || tecla?.keyCode == KeyEventAndroid.KEYCODE_V ||
+                    (keyEvent.hasChr() && (keyEvent.getChr() == 'v'.code || keyEvent.getChr() == 'V'.code || keyEvent.getChr() == 0x16))
+                val texto = RdClipboardManager.vantarisUltimoTexto
+                Log.d(logTag, "vantaris ctrl: v=$esV pulsada=$pulsada texto=${texto != null}")
+                if (esV && (pulsada || textoAccesible != null) && texto != null) {
+                    Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(texto, null) }
+                }
+                return
+            }
+            val codigo = if (textoAccesible == null) tecla?.keyCode else null
+            if (textoAccesible != null || codigo != null) {
+                Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(textoAccesible, codigo) }
             }
             return
         }
@@ -492,6 +511,9 @@ class InputService : AccessibilityService() {
      * por accesibilidad, respetando la seleccion. Para apps sin teclado del sistema activo (ver
      * onKeyEvent). Devuelve si lo ha podido hacer.
      */
+    /** Vantaris: si el tecnico tiene Ctrl pulsado (ver onKeyEvent). */
+    @Volatile private var vantarisCtrl = false
+
     private fun vantarisEscribirPorAccesibilidad(texto: String?, codigo: Int?): Boolean {
         val nodo = possibleAccessibiltyNodes().firstOrNull { it.isEditable() } ?: return false
         nodo.refresh()
