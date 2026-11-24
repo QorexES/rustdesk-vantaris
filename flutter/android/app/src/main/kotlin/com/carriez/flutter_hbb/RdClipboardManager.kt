@@ -17,6 +17,15 @@ import hbb.MessageOuterClass.MultiClipboards
 import ffi.FFI
 
 class RdClipboardManager(private val clipboardManager: ClipboardManager) {
+    companion object {
+        /**
+         * Vantaris: ultimo texto copiado en el PC del tecnico. Lo usa InputService para pegar con
+         * Ctrl+V en apps sin teclado del sistema (en segundo plano Android no deja LEER el
+         * portapapeles, aunque si escribirlo).
+         */
+        @Volatile var vantarisUltimoTexto: String? = null
+    }
+
     private val logTag = "RdClipboardManager"
     private val supportedMimeTypes = arrayOf(
         ClipDescription.MIMETYPE_TEXT_PLAIN,
@@ -191,6 +200,7 @@ class RdClipboardManager(private val clipboardManager: ClipboardManager) {
             return
         }
         val clipData = ClipData(clipDescription, item)
+        vantarisUltimoTexto = text
         lastUpdatedClipData = clipData
         clipboardManager.setPrimaryClip(clipData)
     }

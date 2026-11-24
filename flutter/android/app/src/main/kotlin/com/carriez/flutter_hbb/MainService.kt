@@ -243,6 +243,7 @@ class MainService : Service() {
         Log.d(logTag,"MainService onCreate, sdk int:${Build.VERSION.SDK_INT} reuseVirtualDisplay:$reuseVirtualDisplay")
         FFI.init(this)
         VantarisA11y.ensureEnabled(this) // Vantaris: por si Android quitó el «Control de entrada»
+        MainActivity.vantarisAsegurarPortapapeles(this) // Vantaris: portapapeles sin abrir la ventana
         HandlerThread("Service", Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
             serviceLooper = looper

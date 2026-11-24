@@ -50,6 +50,18 @@ class MainActivity : FlutterActivity() {
         private var _rdClipboardManager: RdClipboardManager? = null
         val rdClipboardManager: RdClipboardManager?
             get() = _rdClipboardManager;
+
+        /**
+         * Vantaris: el portapapeles del tecnico se aplicaba solo si se habia abierto esta ventana
+         * (el gestor se creaba en onCreate). Desde la 1.5.3 el servicio arranca sin abrirla, asi que
+         * copiar en el PC y pegar en el equipo no hacia nada. MainService lo crea si falta.
+         */
+        fun vantarisAsegurarPortapapeles(context: Context) {
+            if (_rdClipboardManager != null) return
+            val cm = context.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+            _rdClipboardManager = RdClipboardManager(cm)
+            FFI.setClipboardManager(_rdClipboardManager!!)
+        }
     }
 
     private val channelTag = "mChannel"
@@ -231,10 +243,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (_rdClipboardManager == null) {
-            _rdClipboardManager = RdClipboardManager(getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-            FFI.setClipboardManager(_rdClipboardManager!!)
-        }
+        vantarisAsegurarPortapapeles(this)
     }
 
     override fun onDestroy() {

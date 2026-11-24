@@ -430,6 +430,43 @@ class InputService : AccessibilityService() {
             }
         }
 
+        // Vantaris: en Android 13+ RustDesk escribe por la InputConnection del teclado del sistema
+        // activo. Una app que pinta SU teclado y no arranca ninguno (el TPV en una tablet) no tiene
+        // esa conexion y las teclas del tecnico se perdian sin decir nada: entonces se escribe por
+        // accesibilidad (ACTION_SET_TEXT) en el campo con el foco.
+        val conexionTeclado = if (Build.VERSION.SDK_INT >= 33) getInputMethod()?.getCurrentInputConnection() else null
+        if (Build.VERSION.SDK_INT >= 33 && conexionTeclado == null) {
+            val textoAccesible = textToCommit
+            val pulsada = keyEvent.getDown() || keyEvent.getPress()
+            // Ctrl llega como tecla propia (abajo/arriba) y la V puede venir sin el modificador, o
+            // como texto «v»: se lleva el estado aqui.
+            if (keyEvent.hasControlKey() && (keyEvent.getControlKey() == hbb.MessageOuterClass.ControlKey.Control ||
+                    keyEvent.getControlKey() == hbb.MessageOuterClass.ControlKey.RControl)) {
+                vantarisCtrl = keyEvent.getDown() && !keyEvent.getPress()
+                return
+            }
+            val ctrl = vantarisCtrl || keyEvent.getModifiersList().any {
+                it == hbb.MessageOuterClass.ControlKey.Control || it == hbb.MessageOuterClass.ControlKey.RControl
+            }
+            val tecla = if (pulsada) KeyEventConverter.toAndroidKeyEvent(keyEvent) else null
+            if (ctrl) {
+                // Ctrl+V: pega lo ultimo que se copio en el PC del tecnico. Con Ctrl pulsado no se
+                // escriben letras (Ctrl+C, Ctrl+A... no deben meter una «c» en el campo).
+                val esV = textoAccesible.equals("v", true) || tecla?.keyCode == KeyEventAndroid.KEYCODE_V ||
+                    (keyEvent.hasChr() && (keyEvent.getChr() == 'v'.code || keyEvent.getChr() == 'V'.code || keyEvent.getChr() == 0x16))
+                val texto = RdClipboardManager.vantarisUltimoTexto
+                Log.d(logTag, "vantaris ctrl: v=$esV pulsada=$pulsada texto=${texto != null}")
+                if (esV && (pulsada || textoAccesible != null) && texto != null) {
+                    Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(texto, null) }
+                }
+                return
+            }
+            val codigo = if (textoAccesible == null) tecla?.keyCode else null
+            if (textoAccesible != null || codigo != null) {
+                Handler(Looper.getMainLooper()).post { vantarisEscribirPorAccesibilidad(textoAccesible, codigo) }
+            }
+            return
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             getInputMethod()?.let { inputMethod ->
                 inputMethod.getCurrentInputConnection()?.let { inputConnection ->
@@ -467,6 +504,51 @@ class InputService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    /**
+     * Vantaris: escribe [texto] (o aplica Borrar/Suprimir, [codigo]) en el campo editable con el foco
+     * por accesibilidad, respetando la seleccion. Para apps sin teclado del sistema activo (ver
+     * onKeyEvent). Devuelve si lo ha podido hacer.
+     */
+    /** Vantaris: si el tecnico tiene Ctrl pulsado (ver onKeyEvent). */
+    @Volatile private var vantarisCtrl = false
+
+    private fun vantarisEscribirPorAccesibilidad(texto: String?, codigo: Int?): Boolean {
+        val nodo = possibleAccessibiltyNodes().firstOrNull { it.isEditable() } ?: return false
+        nodo.refresh()
+        val conPista = Build.VERSION.SDK_INT >= 26 && nodo.isShowingHintText()
+        val actual = if (conPista) "" else (nodo.getText()?.toString() ?: "")
+        var ini = nodo.textSelectionStart.let { if (it < 0 || it > actual.length) actual.length else it }
+        val fin = nodo.textSelectionEnd.let { if (it < 0 || it > actual.length) actual.length else it }
+        if (ini > fin) ini = fin
+        val nuevo: String
+        val cursor: Int
+        when {
+            texto != null -> { nuevo = actual.substring(0, ini) + texto + actual.substring(fin); cursor = ini + texto.length }
+            codigo == KeyEventAndroid.KEYCODE_DEL -> when {
+                ini != fin -> { nuevo = actual.removeRange(ini, fin); cursor = ini }
+                ini > 0 -> { nuevo = actual.removeRange(ini - 1, ini); cursor = ini - 1 }
+                else -> return true
+            }
+            codigo == KeyEventAndroid.KEYCODE_FORWARD_DEL -> when {
+                ini != fin -> { nuevo = actual.removeRange(ini, fin); cursor = ini }
+                ini < actual.length -> { nuevo = actual.removeRange(ini, ini + 1); cursor = ini }
+                else -> return true
+            }
+            else -> return false
+        }
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, nuevo)
+        val ok = nodo.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (ok) {
+            val sel = Bundle()
+            sel.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, cursor)
+            sel.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, cursor)
+            nodo.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+        }
+        Log.d(logTag, "vantaris escribir por accesibilidad: ok=$ok")
+        return ok
     }
 
     private fun tryHandleVolumeKeyEvent(event: KeyEventAndroid): Boolean {
